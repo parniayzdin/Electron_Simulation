@@ -152,6 +152,22 @@ int main()
         glEnableVertexAttribArray(1);
         glBindVertexArray(0);
 
+        // Place the camera three units back so it can see the triangle.
+        const glm::mat4 view = glm::lookAt(
+            glm::vec3(0.0f, 0.0f, 3.0f),
+            glm::vec3(0.0f, 0.0f, 0.0f),
+            glm::vec3(0.0f, 1.0f, 0.0f)
+        );
+
+        // Give the 3D scene a perspective: distant objects look smaller.
+        const glm::mat4 projection = glm::perspective(
+            glm::radians(45.0f),
+            static_cast<float>(WINDOW_WIDTH) /
+                static_cast<float>(WINDOW_HEIGHT),
+            0.1f,
+            100.0f
+        );
+
         while (
             glfwWindowShouldClose(window) == GLFW_FALSE
         ) {
@@ -163,6 +179,20 @@ int main()
             );
 
             shader.use();
+
+            // Start with no transformation, then rotate around the Y axis.
+            glm::mat4 model(1.0f);
+            model = glm::rotate(
+                model,
+                static_cast<float>(glfwGetTime()),
+                glm::vec3(0.0f, 1.0f, 0.0f)
+            );
+
+            // Send the three matrices to the uniforms in basic.vert.
+            shader.setMat4("model", model);
+            shader.setMat4("view", view);
+            shader.setMat4("projection", projection);
+
             glBindVertexArray(vertexArrayObject);
 
             glDrawArrays(GL_TRIANGLES, 0, 3);
