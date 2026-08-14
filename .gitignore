@@ -1,0 +1,12 @@
+# CMake build output
+/build/
+
+# Compiled binaries and object files
+*.o
+*.obj
+*.exe
+*.out
+
+# Editor files
+.vscode/
+.idea/
