@@ -14,7 +14,7 @@ constexpr int WINDOW_WIDTH = 1000;
 constexpr int WINDOW_HEIGHT = 700;
 
 
-//Purpose: 
+//Purpose:
 // Check keyboard
 // Clear old picture
 // Draw new picture
