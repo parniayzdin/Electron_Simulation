@@ -1,7 +1,7 @@
 #include "Shader.hpp"
 
 #include <fstream>
-#include <glm/mat4x4.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
@@ -158,38 +158,24 @@ void Shader::use() const
     glUseProgram(programId);
 }
 
-//Sends a 4x4 matrix to the shader program
-void setMax4(
+void Shader::setMat4(
     const std::string& name,
     const glm::mat4& matrix
-)const;
+) const
+{
+    const GLint location = glGetUniformLocation(
+        programId,
+        name.c_str()
+    );
 
+    if (location == -1) {
+        return;
+    }
 
-// Rotate the object slowly around the Y axis.
-glm::mat4 model(1.0f);
-
-model = glm::rotate(
-    model,
-    static_cast<float>(glfwGetTime()),
-    glm::vec3(0.0f, 1.0f, 0.0f)
-);
-
-// Place the camera three units away from the triangle.
-glm::mat4 view = glm::lookAt(
-    glm::vec3(0.0f, 0.0f, 3.0f),
-    glm::vec3(0.0f, 0.0f, 0.0f),
-    glm::vec3(0.0f, 1.0f, 0.0f)
-);
-
-//Create perspective so distant objects appear smaller.
-glm::mat4 projection = glm::perspective(
-    glm::radians(45.0f),
-    static_cast<float>(WINDOW_WIDTH) /
-        static_cast<float>(WINDOW_HEIGHT),
-    0.1f,
-    100.0f
-);
-
-shader.setMat4("model", model);
-shader.setMat4("view", view);
-shader.setMat4("projection", projection);
+    glUniformMatrix4fv(
+        location,
+        1,
+        GL_FALSE,
+        glm::value_ptr(matrix)
+    );
+}
