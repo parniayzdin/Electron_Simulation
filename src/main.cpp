@@ -372,7 +372,6 @@ int main()
                 &framebufferHeight
             );
 
-            // This updates the camera shape to match the current window shape.
             const float aspectRatio =
                 static_cast<float>(framebufferWidth) /
                 static_cast<float>(framebufferHeight);
