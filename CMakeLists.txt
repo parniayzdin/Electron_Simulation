@@ -24,6 +24,7 @@ link_directories(
 add_executable(Electron_Simulation
     src/main.cpp
     src/Shader.cpp
+    src/Sphere.cpp
     src/atom.cpp
 )
 

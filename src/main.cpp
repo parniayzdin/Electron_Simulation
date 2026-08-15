@@ -5,10 +5,13 @@
 #include <GLFW/glfw3.h>
 
 #include "Shader.hpp"
+#include "Sphere.hpp"
 
+#include <cmath>
 #include <cstddef>
 #include <exception>
 #include <iostream>
+#include <vector>
 
 constexpr int WINDOW_WIDTH = 1000;
 constexpr int WINDOW_HEIGHT = 700;
@@ -25,6 +28,106 @@ struct Vertex {
     float color[3];
 };
 
+// Creates pairs of vertices. Each pair becomes one line with GL_LINES.
+std::vector<Vertex> createGridVertices()
+{
+    std::vector<Vertex> vertices;
+
+    constexpr int GRID_LINE_COUNT = 12;
+    constexpr float GRID_SPACING = 0.25f;
+    constexpr float GRID_Y = -0.8f;
+    constexpr float GRID_HALF_SIZE =
+        GRID_LINE_COUNT * GRID_SPACING;
+
+    for (int index = -GRID_LINE_COUNT;
+         index <= GRID_LINE_COUNT;
+         ++index) {
+        if (index == 0) {
+            continue;
+        }
+
+        const float position = index * GRID_SPACING;
+
+        // Two grid lines: one follows Z, the other follows X.
+        vertices.push_back({
+            {position, GRID_Y, -GRID_HALF_SIZE},
+            {0.18f, 0.38f, 0.50f}
+        });
+        vertices.push_back({
+            {position, GRID_Y, GRID_HALF_SIZE},
+            {0.18f, 0.38f, 0.50f}
+        });
+        vertices.push_back({
+            {-GRID_HALF_SIZE, GRID_Y, position},
+            {0.18f, 0.38f, 0.50f}
+        });
+        vertices.push_back({
+            {GRID_HALF_SIZE, GRID_Y, position},
+            {0.18f, 0.38f, 0.50f}
+        });
+    }
+
+    // Coloured reference axes: X is red, Y is green, Z is blue.
+    vertices.push_back({
+        {-GRID_HALF_SIZE, GRID_Y, 0.0f},
+        {1.0f, 0.18f, 0.18f}
+    });
+    vertices.push_back({
+        {GRID_HALF_SIZE, GRID_Y, 0.0f},
+        {1.0f, 0.18f, 0.18f}
+    });
+    vertices.push_back({
+        {0.0f, GRID_Y, 0.0f},
+        {0.20f, 1.0f, 0.25f}
+    });
+    vertices.push_back({
+        {0.0f, 1.8f, 0.0f},
+        {0.20f, 1.0f, 0.25f}
+    });
+    vertices.push_back({
+        {0.0f, GRID_Y, -GRID_HALF_SIZE},
+        {0.25f, 0.45f, 1.0f}
+    });
+    vertices.push_back({
+        {0.0f, GRID_Y, GRID_HALF_SIZE},
+        {0.25f, 0.45f, 1.0f}
+    });
+
+    return vertices;
+}
+
+// Stores the camera state that changes when the user moves the mouse.
+struct OrbitCamera {
+    glm::vec3 target = glm::vec3(0.0f, 0.0f, 0.0f);
+
+    float yawDegrees = 32.0f;
+    float pitchDegrees = 20.0f;
+    float distance = 5.7f;
+
+    bool isDragging = false;
+    double lastMouseX = 0.0;
+    double lastMouseY = 0.0;
+
+    glm::mat4 viewMatrix() const
+    {
+        const float yaw = glm::radians(yawDegrees);
+        const float pitch = glm::radians(pitchDegrees);
+
+        const glm::vec3 position =
+            target + glm::vec3(
+                distance * std::cos(pitch) * std::sin(yaw),
+                distance * std::sin(pitch),
+                distance * std::cos(pitch) * std::cos(yaw)
+            );
+
+        return glm::lookAt(
+            position,
+            target,
+            glm::vec3(0.0f, 1.0f, 0.0f)
+        );
+    }
+};
+
 void framebufferSizeCallback(
     GLFWwindow*,
     int width,
@@ -37,6 +140,84 @@ void processInput(GLFWwindow* window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
+    }
+}
+
+void mouseButtonCallback(
+    GLFWwindow* window,
+    int button,
+    int action,
+    int
+) {
+    auto* camera = static_cast<OrbitCamera*>(
+        glfwGetWindowUserPointer(window)
+    );
+
+    if (button == GLFW_MOUSE_BUTTON_LEFT) {
+        camera->isDragging = (action == GLFW_PRESS);
+
+        glfwGetCursorPos(
+            window,
+            &camera->lastMouseX,
+            &camera->lastMouseY
+        );
+    }
+}
+
+void cursorPositionCallback(
+    GLFWwindow* window,
+    double mouseX,
+    double mouseY
+) {
+    auto* camera = static_cast<OrbitCamera*>(
+        glfwGetWindowUserPointer(window)
+    );
+
+    if (!camera->isDragging) {
+        return;
+    }
+
+    const float changeX = static_cast<float>(
+        mouseX - camera->lastMouseX
+    );
+    const float changeY = static_cast<float>(
+        camera->lastMouseY - mouseY
+    );
+
+    camera->lastMouseX = mouseX;
+    camera->lastMouseY = mouseY;
+
+    constexpr float MOUSE_SENSITIVITY = 0.25f;
+
+    camera->yawDegrees += changeX * MOUSE_SENSITIVITY;
+    camera->pitchDegrees += changeY * MOUSE_SENSITIVITY;
+
+    // Avoid flipping over when looking directly up or down.
+    if (camera->pitchDegrees > 89.0f) {
+        camera->pitchDegrees = 89.0f;
+    }
+    if (camera->pitchDegrees < -89.0f) {
+        camera->pitchDegrees = -89.0f;
+    }
+}
+
+void scrollCallback(
+    GLFWwindow* window,
+    double,
+    double scrollAmount
+) {
+    auto* camera = static_cast<OrbitCamera*>(
+        glfwGetWindowUserPointer(window)
+    );
+
+    camera->distance -=
+        static_cast<float>(scrollAmount) * 0.4f;
+
+    if (camera->distance < 1.5f) {
+        camera->distance = 1.5f;
+    }
+    if (camera->distance > 20.0f) {
+        camera->distance = 20.0f;
     }
 }
 
@@ -70,6 +251,14 @@ int main()
 
     glfwMakeContextCurrent(window);
 
+    OrbitCamera camera;
+
+    // GLFW passes the same camera pointer to each mouse callback.
+    glfwSetWindowUserPointer(window, &camera);
+    glfwSetMouseButtonCallback(window, mouseButtonCallback);
+    glfwSetCursorPosCallback(window, cursorPositionCallback);
+    glfwSetScrollCallback(window, scrollCallback);
+
     glewExperimental = GL_TRUE;
 
     if (glewInit() != GLEW_OK) {
@@ -100,30 +289,31 @@ int main()
             "shaders/basic.frag"
         );
 
-        const Vertex vertices[] = {
-            // Position                  // Colour
-            {{-0.6f, -0.5f, 0.0f},      {1.0f, 0.0f, 0.0f}}, // Red
-            {{ 0.6f, -0.5f, 0.0f},      {0.0f, 1.0f, 0.0f}}, // Green
-            {{ 0.0f,  0.6f, 0.0f},      {0.0f, 0.0f, 1.0f}}  // Blue
-        };
+        // The temporary triangle is now a small, round electron.
+        Sphere electron(0.28f, 32, 20);
 
-        GLuint vertexArrayObject = 0;
-        GLuint vertexBufferObject = 0;
+        const std::vector<Vertex> gridVertices =
+            createGridVertices();
 
-        glGenVertexArrays(1, &vertexArrayObject);
-        glGenBuffers(1, &vertexBufferObject);
+        GLuint gridVertexArrayObject = 0;
+        GLuint gridVertexBufferObject = 0;
 
-        glBindVertexArray(vertexArrayObject);
-        glBindBuffer(GL_ARRAY_BUFFER, vertexBufferObject);
+        glGenVertexArrays(1, &gridVertexArrayObject);
+        glGenBuffers(1, &gridVertexBufferObject);
+
+        glBindVertexArray(gridVertexArrayObject);
+        glBindBuffer(GL_ARRAY_BUFFER, gridVertexBufferObject);
 
         glBufferData(
             GL_ARRAY_BUFFER,
-            sizeof(vertices),
-            vertices,
+            static_cast<GLsizeiptr>(
+                gridVertices.size() * sizeof(Vertex)
+            ),
+            gridVertices.data(),
             GL_STATIC_DRAW
         );
 
-        //Explain where position is stored in each Vertex.
+        // The grid uses the same position-and-colour Vertex layout.
         glVertexAttribPointer(
             0,
             3,
@@ -134,10 +324,8 @@ int main()
                 offsetof(Vertex, position)
             )
         );
-
         glEnableVertexAttribArray(0);
 
-        //Explain where colour is stored in each Vertex.
         glVertexAttribPointer(
             1,
             3,
@@ -148,16 +336,8 @@ int main()
                 offsetof(Vertex, color)
             )
         );
-
         glEnableVertexAttribArray(1);
         glBindVertexArray(0);
-
-        // Place the camera three units back so it can see the triangle.
-        const glm::mat4 view = glm::lookAt(
-            glm::vec3(0.0f, 0.0f, 3.0f),
-            glm::vec3(0.0f, 0.0f, 0.0f),
-            glm::vec3(0.0f, 1.0f, 0.0f)
-        );
 
         // Give the 3D scene a perspective: distant objects look smaller.
         const glm::mat4 projection = glm::perspective(
@@ -180,31 +360,34 @@ int main()
 
             shader.use();
 
-            // Start with no transformation, then rotate around the Y axis.
-            glm::mat4 model(1.0f);
-            model = glm::rotate(
-                model,
-                static_cast<float>(glfwGetTime()),
-                glm::vec3(0.0f, 1.0f, 0.0f)
-            );
-
-            // Send the three matrices to the uniforms in basic.vert.
-            shader.setMat4("model", model);
+            // Build a fresh view matrix from the latest mouse input.
+            const glm::mat4 view = camera.viewMatrix();
             shader.setMat4("view", view);
             shader.setMat4("projection", projection);
 
-            glBindVertexArray(vertexArrayObject);
+            // Draw the fixed grid before the electron.
+            const glm::mat4 gridModel(1.0f);
+            shader.setMat4("model", gridModel);
 
-            glDrawArrays(GL_TRIANGLES, 0, 3);
-
+            glBindVertexArray(gridVertexArrayObject);
+            glDrawArrays(
+                GL_LINES,
+                0,
+                static_cast<GLsizei>(gridVertices.size())
+            );
             glBindVertexArray(0);
+
+            // Its position will come from physics in the next step.
+            const glm::mat4 electronModel(1.0f);
+            shader.setMat4("model", electronModel);
+            electron.draw();
 
             glfwSwapBuffers(window);
             glfwPollEvents();
         }
 
-        glDeleteBuffers(1, &vertexBufferObject);
-        glDeleteVertexArrays(1, &vertexArrayObject);
+        glDeleteBuffers(1, &gridVertexBufferObject);
+        glDeleteVertexArrays(1, &gridVertexArrayObject);
     }
     catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
