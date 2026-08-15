@@ -360,12 +360,32 @@ int main()
 
             shader.use();
 
-            // Build a fresh view matrix from the latest mouse input.
+            //Build a fresh view matrix from the latest mouse input.
             const glm::mat4 view = camera.viewMatrix();
             shader.setMat4("view", view);
+            int framebufferWidth = 0;
+            int framebufferHeight = 0;
+
+            glfwGetFramebufferSize(
+                window,
+                &framebufferWidth,
+                &framebufferHeight
+            );
+
+            // This updates the camera shape to match the current window shape.
+            const float aspectRatio =
+                static_cast<float>(framebufferWidth) /
+                static_cast<float>(framebufferHeight);
+
+            const glm::mat4 projection = glm::perspective(
+                glm::radians(45.0f),
+                aspectRatio,
+                0.1f,
+                100.0f
+            );
             shader.setMat4("projection", projection);
 
-            // Draw the fixed grid before the electron.
+            //Draw the fixed grid before the electron.
             const glm::mat4 gridModel(1.0f);
             shader.setMat4("model", gridModel);
 
