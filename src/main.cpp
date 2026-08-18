@@ -6,6 +6,7 @@
 
 #include "Shader.hpp"
 #include "Sphere.hpp"
+#include "Particle.hpp"
 
 #include <cmath>
 #include <cstddef>
@@ -28,7 +29,7 @@ struct Vertex {
     float color[3];
 };
 
-// Creates pairs of vertices. Each pair becomes one line with GL_LINES.
+//Creates pairs of vertices. Each pair becomes one line with GL_LINES.
 std::vector<Vertex> createGridVertices()
 {
     std::vector<Vertex> vertices;
@@ -48,7 +49,7 @@ std::vector<Vertex> createGridVertices()
 
         const float position = index * GRID_SPACING;
 
-        // Two grid lines: one follows Z, the other follows X.
+        //Two grid lines: one follows Z, the other follows X.
         vertices.push_back({
             {position, GRID_Y, -GRID_HALF_SIZE},
             {0.18f, 0.38f, 0.50f}
@@ -67,7 +68,7 @@ std::vector<Vertex> createGridVertices()
         });
     }
 
-    // Coloured reference axes: X is red, Y is green, Z is blue.
+    //Coloured reference axes: X is red, Y is green, Z is blue.
     vertices.push_back({
         {-GRID_HALF_SIZE, GRID_Y, 0.0f},
         {1.0f, 0.18f, 0.18f}
@@ -96,7 +97,7 @@ std::vector<Vertex> createGridVertices()
     return vertices;
 }
 
-// Stores the camera state that changes when the user moves the mouse.
+//Stores the camera state that changes when the user moves the mouse.
 struct OrbitCamera {
     glm::vec3 target = glm::vec3(0.0f, 0.0f, 0.0f);
 
@@ -140,6 +141,39 @@ void processInput(GLFWwindow* window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
+    }
+}
+
+void keepParticleInView(Particle& particle)
+{
+    constexpr float SIDE_BOUNDARY = 2.5f;
+    constexpr float FLOOR = -0.45f;
+    constexpr float CEILING = 1.5f;
+
+    //Bounce on invisible walls so test electrons stay in the scene.
+    if (particle.position.x > SIDE_BOUNDARY) {
+        particle.position.x = SIDE_BOUNDARY;
+        particle.velocity.x = -std::abs(particle.velocity.x);
+    }
+    if (particle.position.x < -SIDE_BOUNDARY) {
+        particle.position.x = -SIDE_BOUNDARY;
+        particle.velocity.x = std::abs(particle.velocity.x);
+    }
+    if (particle.position.z > SIDE_BOUNDARY) {
+        particle.position.z = SIDE_BOUNDARY;
+        particle.velocity.z = -std::abs(particle.velocity.z);
+    }
+    if (particle.position.z < -SIDE_BOUNDARY) {
+        particle.position.z = -SIDE_BOUNDARY;
+        particle.velocity.z = std::abs(particle.velocity.z);
+    }
+    if (particle.position.y > CEILING) {
+        particle.position.y = CEILING;
+        particle.velocity.y = -std::abs(particle.velocity.y);
+    }
+    if (particle.position.y < FLOOR) {
+        particle.position.y = FLOOR;
+        particle.velocity.y = std::abs(particle.velocity.y);
     }
 }
 
@@ -253,7 +287,7 @@ int main()
 
     OrbitCamera camera;
 
-    // GLFW passes the same camera pointer to each mouse callback.
+    //GLFW passes the same camera pointer to each mouse callback.
     glfwSetWindowUserPointer(window, &camera);
     glfwSetMouseButtonCallback(window, mouseButtonCallback);
     glfwSetCursorPosCallback(window, cursorPositionCallback);
@@ -291,6 +325,31 @@ int main()
 
         // The temporary triangle is now a small, round electron.
         Sphere electron(0.28f, 32, 20);
+
+        //Each particle has its own position and velocity.
+        std::vector<Particle> electrons = {
+            {
+                glm::vec3(-0.9f, 0.3f, 0.2f),
+                glm::vec3(0.5f, 0.1f, 0.2f),
+                glm::vec3(0.15f, 0.80f, 1.0f),
+                -1.0f,
+                1.0f
+            },
+            {
+                glm::vec3(0.6f, 0.6f, -0.4f),
+                glm::vec3(-0.3f, -0.2f, 0.4f),
+                glm::vec3(0.15f, 0.80f, 1.0f),
+                -1.0f,
+                1.0f
+            },
+            {
+                glm::vec3(0.2f, -0.1f, 0.8f),
+                glm::vec3(0.2f, 0.3f, -0.5f),
+                glm::vec3(0.15f, 0.80f, 1.0f),
+                -1.0f,
+                1.0f
+            }
+        };
 
         const std::vector<Vertex> gridVertices =
             createGridVertices();
@@ -339,19 +398,26 @@ int main()
         glEnableVertexAttribArray(1);
         glBindVertexArray(0);
 
-        // Give the 3D scene a perspective: distant objects look smaller.
-        const glm::mat4 projection = glm::perspective(
-            glm::radians(45.0f),
-            static_cast<float>(WINDOW_WIDTH) /
-                static_cast<float>(WINDOW_HEIGHT),
-            0.1f,
-            100.0f
-        );
+        //This starts the timer after GLFW has initialized.
+        float previousTime = static_cast<float>(glfwGetTime());
 
         while (
             glfwWindowShouldClose(window) == GLFW_FALSE
         ) {
             processInput(window);
+            const float currentTime =
+                static_cast<float>(glfwGetTime());
+
+            const float deltaTime =
+                currentTime - previousTime;
+
+            previousTime = currentTime;
+
+            //Move every electron using position = position + velocity × time.
+            for (Particle& particle : electrons) {
+                particle.position += particle.velocity * deltaTime;
+                keepParticleInView(particle);
+            }
 
             glClear(
                 GL_COLOR_BUFFER_BIT |
@@ -396,10 +462,19 @@ int main()
             );
             glBindVertexArray(0);
 
-            // Its position will come from physics in the next step.
-            const glm::mat4 electronModel(1.0f);
-            shader.setMat4("model", electronModel);
-            electron.draw();
+            //Draw the same sphere mesh once for every simulated electron.
+            for (const Particle& particle : electrons) {
+                glm::mat4 electronModel(1.0f);
+
+                //Move this sphere to the particle's current simulation position.
+                electronModel = glm::translate(
+                    electronModel,
+                    particle.position
+                );
+
+                shader.setMat4("model", electronModel);
+                electron.draw();
+            }
 
             glfwSwapBuffers(window);
             glfwPollEvents();
@@ -412,6 +487,7 @@ int main()
         std::cerr << error.what() << '\n';
         exitCode = 1;
     }
+
 
     glfwDestroyWindow(window);
     glfwTerminate();
