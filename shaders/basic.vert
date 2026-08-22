@@ -8,6 +8,8 @@ out vec3 vertexColor;
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
+uniform vec3 particleColor;
+uniform float particleColorWeight;
 
 void main()
 {
@@ -17,5 +19,6 @@ void main()
         model * //movs, rotates or resizes an object
         vec4(position, 1.0);
 
-    vertexColor = color;
+    //A weight of zero preserves grid colours; particles use their own palette.
+    vertexColor = mix(color, particleColor, particleColorWeight);
 }
