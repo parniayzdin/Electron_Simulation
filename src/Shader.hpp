@@ -3,6 +3,7 @@
 #include <GL/glew.h>
 
 #include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include <string>
@@ -28,10 +29,22 @@ public:
         const glm::vec3& value
     ) const;
 
+    //Sends one 2D position to a shader uniform.
+    void setVec2(
+        const std::string& name,
+        const glm::vec2& value
+    ) const;
+
     //Sends one decimal value to a shader uniform.
     void setFloat(
         const std::string& name,
         float value
+    ) const;
+
+    //Sends one whole-number setting to a shader uniform.
+    void setInt(
+        const std::string& name,
+        int value
     ) const;
 
 private:

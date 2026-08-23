@@ -9,6 +9,7 @@
 
 #include "Shader.hpp"
 #include "Sphere.hpp"
+#include "AtomOverview.hpp"
 #include "Particle.hpp"
 #include "ElectromagneticField.hpp"
 #include "Physics.hpp"
@@ -21,6 +22,7 @@
 
 constexpr int WINDOW_WIDTH = 1000;
 constexpr int WINDOW_HEIGHT = 700;
+constexpr float ATOM_OVERVIEW_DISTANCE = 10.0f;
 
 
 //Purpose:
@@ -29,10 +31,43 @@ constexpr int WINDOW_HEIGHT = 700;
 // Draw new picture
 // Show it on screen
 // Repeat
-struct Vertex {
-    float position[3];
-    float color[3];
+//Stores one corner of the flat screen-sized drawing surface.
+struct ScreenVertex {
+    float position[2];
+    float textureCoordinate[2];
 };
+
+//Makes the hidden scene texture match the current window size.
+void resizeSceneTexture(
+    GLuint sceneColorTexture,
+    GLuint depthStencilRenderbuffer,
+    int width,
+    int height
+) {
+    glBindTexture(GL_TEXTURE_2D, sceneColorTexture);
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_RGB,
+        width,
+        height,
+        0,
+        GL_RGB,
+        GL_UNSIGNED_BYTE,
+        nullptr
+    );
+
+    glBindRenderbuffer(
+        GL_RENDERBUFFER,
+        depthStencilRenderbuffer
+    );
+    glRenderbufferStorage(
+        GL_RENDERBUFFER,
+        GL_DEPTH24_STENCIL8,
+        width,
+        height
+    );
+}
 
 //Creates pairs of vertices. Each pair becomes one line with GL_LINES.
 std::vector<Vertex> createGridVertices()
@@ -130,20 +165,20 @@ void addFieldLine(
     addLine(vertices, start, end, color);
 }
 
-//Creates cyan magnetic-field arrows spread through the 3D scene.
+//Creates one long line showing the tilted magnetic-field direction.
 std::vector<Vertex> createFieldVertices(
     const ElectromagneticField& field,
-    float flowOffset
+    float
 ) {
     std::vector<Vertex> vertices;
 
     const glm::vec3 magneticUnitDirection =
         glm::normalize(field.magnetic);
-    const glm::vec3 magneticDirection =
-        magneticUnitDirection * 0.38f;
 
-    const glm::vec3 magneticColor(0.28f, 0.90f, 1.0f);
+    const glm::vec3 magneticColor(0.18f, 0.48f, 1.0f);
 
+    //The previous grid of short field lines is kept here for reference.
+    /*
     for (int y = 0; y < 3; ++y) {
         for (int x = -3; x <= 3; ++x) {
             for (int z = -3; z <= 3; ++z) {
@@ -162,14 +197,69 @@ std::vector<Vertex> createFieldVertices(
             }
         }
     }
+    */
+
+    //This single line is the axis that the electron should coil around.
+    addLine(
+        vertices,
+        magneticUnitDirection * -5.0f,
+        magneticUnitDirection * 5.0f,
+        magneticColor
+    );
 
     return vertices;
+}
+
+//Builds a helical starting state for any nonzero magnetic-field direction.
+Particle createHelicalElectron(const ElectromagneticField& field)
+{
+    Particle electron;
+
+    //These describe the demonstration, not a hard-coded path.
+    constexpr float HELIX_RADIUS = 0.65f;
+    constexpr float FORWARD_SPEED = 0.18f;
+    constexpr float MINIMUM_FIELD_STRENGTH = 0.0001f;
+
+    const float magneticStrength = glm::length(field.magnetic);
+    if (magneticStrength < MINIMUM_FIELD_STRENGTH) {
+        //A helix needs a magnetic field, so this safe fallback does not move.
+        return electron;
+    }
+
+    const glm::vec3 magneticUnitDirection =
+        field.magnetic / magneticStrength;
+
+    //Choose a helper that is not parallel to B, even when B is nearly vertical.
+    glm::vec3 helper(0.0f, 1.0f, 0.0f);
+    if (std::abs(glm::dot(magneticUnitDirection, helper)) > 0.90f) {
+        helper = glm::vec3(1.0f, 0.0f, 0.0f);
+    }
+
+    //This offset points from the magnetic-field axis to the electron.
+    const glm::vec3 radialOffset = glm::normalize(
+        glm::cross(magneticUnitDirection, helper)
+    ) * HELIX_RADIUS;
+
+    electron.position = radialOffset;
+
+    //This velocity makes magnetic force point back toward the field axis.
+    const glm::vec3 circularVelocity =
+        -(electron.charge / electron.mass) *
+        glm::cross(field.magnetic, radialOffset);
+
+    //This extra velocity carries the electron along the tilted field line.
+    const glm::vec3 forwardVelocity =
+        magneticUnitDirection * FORWARD_SPEED;
+
+    electron.velocity = circularVelocity + forwardVelocity;
+
+    return electron;
 }
 
 //Keeps a short history so each electron leaves a visible path behind it.
 void recordTrailPoint(Particle& particle)
 {
-    constexpr std::size_t MAX_TRAIL_POINTS = 180;
+    constexpr std::size_t MAX_TRAIL_POINTS = 360;
     constexpr float MINIMUM_TRAIL_DISTANCE = 0.015f;
 
     if (!particle.trail.empty()) {
@@ -190,15 +280,40 @@ void recordTrailPoint(Particle& particle)
 }
 
 //Turns saved trail positions into coloured vertices for OpenGL.
-std::vector<Vertex> createTrailVertices(const Particle& particle)
+std::vector<Vertex> createTrailVertices(
+    const Particle& particle,
+    float currentTime
+)
 {
     std::vector<Vertex> vertices;
     vertices.reserve(particle.trail.size());
 
-    for (const glm::vec3& position : particle.trail) {
+    const float pulsePosition = std::fmod(currentTime * 0.65f, 1.0f);
+
+    for (std::size_t index = 0;
+         index < particle.trail.size();
+         ++index) {
+        const float progress = particle.trail.size() > 1 ?
+            static_cast<float>(index) /
+            static_cast<float>(particle.trail.size() - 1) :
+            0.0f;
+        const float distanceFromPulse = std::abs(
+            progress - pulsePosition
+        );
+        const float pulseStrength = std::exp(
+            -100.0f * distanceFromPulse * distanceFromPulse
+        );
+
+        //Most of the path is dim cyan; one moving section becomes bright.
+        const glm::vec3 dimColor = particle.color * 0.28f;
+        const glm::vec3 lightColor(0.92f, 1.0f, 1.0f);
+        const glm::vec3 color = dimColor +
+            (lightColor - dimColor) * pulseStrength;
+
+        const glm::vec3& position = particle.trail[index];
         vertices.push_back({
             {position.x, position.y, position.z},
-            {particle.color.r, particle.color.g, particle.color.b}
+            {color.r, color.g, color.b}
         });
     }
 
@@ -207,17 +322,15 @@ std::vector<Vertex> createTrailVertices(const Particle& particle)
 
 //Stores the camera state that changes when the user moves the mouse.
 struct OrbitCamera {
-    glm::vec3 target = glm::vec3(0.0f, 0.0f, 0.0f);
-
     float yawDegrees = 32.0f;
     float pitchDegrees = 20.0f;
-    float distance = 5.7f;
+    float distance = 12.0f;
 
     bool isDragging = false;
     double lastMouseX = 0.0;
     double lastMouseY = 0.0;
 
-    glm::mat4 viewMatrix() const
+    glm::mat4 viewMatrix(const glm::vec3& target) const
     {
         const float yaw = glm::radians(yawDegrees);
         const float pitch = glm::radians(pitchDegrees);
@@ -249,39 +362,6 @@ void processInput(GLFWwindow* window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
-    }
-}
-
-void keepParticleInView(Particle& particle)
-{
-    constexpr float SIDE_BOUNDARY = 2.5f;
-    constexpr float FLOOR = -0.45f;
-    constexpr float CEILING = 1.5f;
-
-    //Bounce on invisible walls so test electrons stay in the scene.
-    if (particle.position.x > SIDE_BOUNDARY) {
-        particle.position.x = SIDE_BOUNDARY;
-        particle.velocity.x = -std::abs(particle.velocity.x);
-    }
-    if (particle.position.x < -SIDE_BOUNDARY) {
-        particle.position.x = -SIDE_BOUNDARY;
-        particle.velocity.x = std::abs(particle.velocity.x);
-    }
-    if (particle.position.z > SIDE_BOUNDARY) {
-        particle.position.z = SIDE_BOUNDARY;
-        particle.velocity.z = -std::abs(particle.velocity.z);
-    }
-    if (particle.position.z < -SIDE_BOUNDARY) {
-        particle.position.z = -SIDE_BOUNDARY;
-        particle.velocity.z = std::abs(particle.velocity.z);
-    }
-    if (particle.position.y > CEILING) {
-        particle.position.y = CEILING;
-        particle.velocity.y = -std::abs(particle.velocity.y);
-    }
-    if (particle.position.y < FLOOR) {
-        particle.position.y = FLOOR;
-        particle.velocity.y = std::abs(particle.velocity.y);
     }
 }
 
@@ -437,48 +517,48 @@ int main()
             "shaders/basic.vert",
             "shaders/basic.frag"
         );
+        Shader lensShader(
+            "shaders/screen.vert",
+            "shaders/screen.frag"
+        );
 
         // The temporary triangle is now a small, round electron.
-        Sphere electron(0.28f, 32, 20);
-
-        //Each particle has its own position and velocity.
-        std::vector<Particle> electrons = {
-            {
-                glm::vec3(-0.9f, 0.3f, 0.2f),
-                glm::vec3(0.5f, 0.1f, 0.2f),
-                glm::vec3(0.20f, 0.65f, 1.0f),
-                -1.0f,
-                1.0f
-            },
-            {
-                glm::vec3(0.6f, 0.6f, -0.4f),
-                glm::vec3(-0.3f, -0.2f, 0.4f),
-                glm::vec3(0.82f, 0.25f, 1.0f),
-                -1.0f,
-                1.0f
-            },
-            {
-                glm::vec3(0.2f, -0.1f, 0.8f),
-                glm::vec3(0.2f, 0.3f, -0.5f),
-                glm::vec3(1.0f, 0.50f, 0.12f),
-                -1.0f,
-                1.0f
-            }
-        };
+        Sphere electron(0.18f, 32, 20);
 
         //All electrons see the same uniform electric and magnetic fields.
         const ElectromagneticField field;
 
+        //This helper calculates the starting position and velocity from B.
+        std::vector<Particle> electrons = {
+            createHelicalElectron(field)
+        };
+
         const std::vector<Vertex> gridVertices =
             createGridVertices();
+        const AtomOverview atomOverview;
+        const std::vector<Vertex>& orbitalVertices =
+            atomOverview.orbitalVertices();
+        const std::vector<Vertex>& clippingPlaneVertices =
+            atomOverview.clippingPlaneVertices();
 
         const std::vector<Vertex> fieldVertices =
             createFieldVertices(field, 0.0f);
 
         GLuint gridVertexArrayObject = 0;
         GLuint gridVertexBufferObject = 0;
+        GLuint hydrogenCloudVertexArrayObject = 0;
+        GLuint hydrogenCloudVertexBufferObject = 0;
+        GLuint clippingPlaneVertexArrayObject = 0;
+        GLuint clippingPlaneVertexBufferObject = 0;
         GLuint fieldVertexArrayObject = 0;
         GLuint fieldVertexBufferObject = 0;
+        GLuint screenVertexArrayObject = 0;
+        GLuint screenVertexBufferObject = 0;
+        GLuint sceneFramebuffer = 0;
+        GLuint sceneColorTexture = 0;
+        GLuint sceneDepthStencilRenderbuffer = 0;
+        int sceneTextureWidth = 0;
+        int sceneTextureHeight = 0;
         std::vector<GLuint> trailVertexArrayObjects(
             electrons.size(),
             0
@@ -516,6 +596,80 @@ int main()
         );
         glEnableVertexAttribArray(0);
 
+        glVertexAttribPointer(
+            1,
+            3,
+            GL_FLOAT,
+            GL_FALSE,
+            static_cast<GLsizei>(sizeof(Vertex)),
+            reinterpret_cast<void*>(
+                offsetof(Vertex, color)
+            )
+        );
+        glEnableVertexAttribArray(1);
+        glBindVertexArray(0);
+
+        //The orbital point cloud uses the same position-and-colour layout.
+        glGenVertexArrays(1, &hydrogenCloudVertexArrayObject);
+        glGenBuffers(1, &hydrogenCloudVertexBufferObject);
+        glBindVertexArray(hydrogenCloudVertexArrayObject);
+        glBindBuffer(GL_ARRAY_BUFFER, hydrogenCloudVertexBufferObject);
+        glBufferData(
+            GL_ARRAY_BUFFER,
+            static_cast<GLsizeiptr>(
+                orbitalVertices.size() * sizeof(Vertex)
+            ),
+            orbitalVertices.data(),
+            GL_STATIC_DRAW
+        );
+        glVertexAttribPointer(
+            0,
+            3,
+            GL_FLOAT,
+            GL_FALSE,
+            static_cast<GLsizei>(sizeof(Vertex)),
+            reinterpret_cast<void*>(
+                offsetof(Vertex, position)
+            )
+        );
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(
+            1,
+            3,
+            GL_FLOAT,
+            GL_FALSE,
+            static_cast<GLsizei>(sizeof(Vertex)),
+            reinterpret_cast<void*>(
+                offsetof(Vertex, color)
+            )
+        );
+        glEnableVertexAttribArray(1);
+        glBindVertexArray(0);
+
+        //The three white guide planes also use the same Vertex layout.
+        glGenVertexArrays(1, &clippingPlaneVertexArrayObject);
+        glGenBuffers(1, &clippingPlaneVertexBufferObject);
+        glBindVertexArray(clippingPlaneVertexArrayObject);
+        glBindBuffer(GL_ARRAY_BUFFER, clippingPlaneVertexBufferObject);
+        glBufferData(
+            GL_ARRAY_BUFFER,
+            static_cast<GLsizeiptr>(
+                clippingPlaneVertices.size() * sizeof(Vertex)
+            ),
+            clippingPlaneVertices.data(),
+            GL_STATIC_DRAW
+        );
+        glVertexAttribPointer(
+            0,
+            3,
+            GL_FLOAT,
+            GL_FALSE,
+            static_cast<GLsizei>(sizeof(Vertex)),
+            reinterpret_cast<void*>(
+                offsetof(Vertex, position)
+            )
+        );
+        glEnableVertexAttribArray(0);
         glVertexAttribPointer(
             1,
             3,
@@ -582,7 +736,7 @@ int main()
         }
         glBindVertexArray(0);
 
-        //The field arrows use the same Vertex structure as the grid.
+        //The field line uses the same Vertex structure as the grid.
         glGenVertexArrays(1, &fieldVertexArrayObject);
         glGenBuffers(1, &fieldVertexBufferObject);
 
@@ -623,6 +777,105 @@ int main()
         glEnableVertexAttribArray(1);
         glBindVertexArray(0);
 
+        //This flat rectangle displays the completed 3D scene after lensing it.
+        const ScreenVertex screenVertices[] = {
+            {{-1.0f, -1.0f}, {0.0f, 0.0f}},
+            {{ 1.0f, -1.0f}, {1.0f, 0.0f}},
+            {{ 1.0f,  1.0f}, {1.0f, 1.0f}},
+            {{-1.0f, -1.0f}, {0.0f, 0.0f}},
+            {{ 1.0f,  1.0f}, {1.0f, 1.0f}},
+            {{-1.0f,  1.0f}, {0.0f, 1.0f}}
+        };
+
+        glGenVertexArrays(1, &screenVertexArrayObject);
+        glGenBuffers(1, &screenVertexBufferObject);
+        glBindVertexArray(screenVertexArrayObject);
+        glBindBuffer(GL_ARRAY_BUFFER, screenVertexBufferObject);
+        glBufferData(
+            GL_ARRAY_BUFFER,
+            sizeof(screenVertices),
+            screenVertices,
+            GL_STATIC_DRAW
+        );
+        glVertexAttribPointer(
+            0,
+            2,
+            GL_FLOAT,
+            GL_FALSE,
+            static_cast<GLsizei>(sizeof(ScreenVertex)),
+            reinterpret_cast<void*>(
+                offsetof(ScreenVertex, position)
+            )
+        );
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(
+            1,
+            2,
+            GL_FLOAT,
+            GL_FALSE,
+            static_cast<GLsizei>(sizeof(ScreenVertex)),
+            reinterpret_cast<void*>(
+                offsetof(ScreenVertex, textureCoordinate)
+            )
+        );
+        glEnableVertexAttribArray(1);
+        glBindVertexArray(0);
+
+        //Render the 3D scene to a hidden texture before showing it on screen.
+        glGenFramebuffers(1, &sceneFramebuffer);
+        glGenTextures(1, &sceneColorTexture);
+        glGenRenderbuffers(1, &sceneDepthStencilRenderbuffer);
+
+        glBindTexture(GL_TEXTURE_2D, sceneColorTexture);
+        glTexParameteri(
+            GL_TEXTURE_2D,
+            GL_TEXTURE_MIN_FILTER,
+            GL_LINEAR
+        );
+        glTexParameteri(
+            GL_TEXTURE_2D,
+            GL_TEXTURE_MAG_FILTER,
+            GL_LINEAR
+        );
+        glTexParameteri(
+            GL_TEXTURE_2D,
+            GL_TEXTURE_WRAP_S,
+            GL_CLAMP_TO_EDGE
+        );
+        glTexParameteri(
+            GL_TEXTURE_2D,
+            GL_TEXTURE_WRAP_T,
+            GL_CLAMP_TO_EDGE
+        );
+        resizeSceneTexture(
+            sceneColorTexture,
+            sceneDepthStencilRenderbuffer,
+            WINDOW_WIDTH,
+            WINDOW_HEIGHT
+        );
+        sceneTextureWidth = WINDOW_WIDTH;
+        sceneTextureHeight = WINDOW_HEIGHT;
+
+        glBindFramebuffer(GL_FRAMEBUFFER, sceneFramebuffer);
+        glFramebufferTexture2D(
+            GL_FRAMEBUFFER,
+            GL_COLOR_ATTACHMENT0,
+            GL_TEXTURE_2D,
+            sceneColorTexture,
+            0
+        );
+        glFramebufferRenderbuffer(
+            GL_FRAMEBUFFER,
+            GL_DEPTH_STENCIL_ATTACHMENT,
+            GL_RENDERBUFFER,
+            sceneDepthStencilRenderbuffer
+        );
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) !=
+            GL_FRAMEBUFFER_COMPLETE) {
+            throw std::runtime_error("Could not create scene framebuffer.");
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
         //This starts the timer after GLFW has initialized.
         float previousTime = static_cast<float>(glfwGetTime());
 
@@ -640,6 +893,10 @@ int main()
             const float deltaTime =
                 currentTime - previousTime;
 
+            //Scrolling far away shows the atom; scrolling close shows the field.
+            const bool isAtomOverview = camera.distance >=
+                ATOM_OVERVIEW_DISTANCE;
+
             //The arrows repeat every grid space, making the field appear to flow.
             const float fieldFlowOffset = std::fmod(
                 currentTime * 0.35f,
@@ -656,16 +913,42 @@ int main()
             const float physicsTimeStep =
                 deltaTime > 0.02f ? 0.02f : deltaTime;
 
-            for (Particle& particle : electrons) {
-                advanceParticleWithBoris(
-                    particle,
-                    field,
-                    physicsTimeStep
-                );
-                keepParticleInView(particle);
-                recordTrailPoint(particle);
+            //Pause the close-up physics while the user is viewing the atom.
+            if (!isAtomOverview) {
+                for (Particle& particle : electrons) {
+                    advanceParticleWithBoris(
+                        particle,
+                        field,
+                        physicsTimeStep
+                    );
+                    recordTrailPoint(particle);
+                }
             }
 
+            int framebufferWidth = 0;
+            int framebufferHeight = 0;
+            glfwGetFramebufferSize(
+                window,
+                &framebufferWidth,
+                &framebufferHeight
+            );
+
+            //Keep the hidden scene texture sharp when the window is resized.
+            if (framebufferWidth != sceneTextureWidth ||
+                framebufferHeight != sceneTextureHeight) {
+                resizeSceneTexture(
+                    sceneColorTexture,
+                    sceneDepthStencilRenderbuffer,
+                    framebufferWidth,
+                    framebufferHeight
+                );
+                sceneTextureWidth = framebufferWidth;
+                sceneTextureHeight = framebufferHeight;
+            }
+
+            //First draw the regular 3D world into a hidden texture.
+            glBindFramebuffer(GL_FRAMEBUFFER, sceneFramebuffer);
+            glViewport(0, 0, framebufferWidth, framebufferHeight);
             glClear(
                 GL_COLOR_BUFFER_BIT |
                 GL_DEPTH_BUFFER_BIT
@@ -673,17 +956,18 @@ int main()
 
             shader.use();
 
-            //Build a fresh view matrix from the latest mouse input.
-            const glm::mat4 view = camera.viewMatrix();
+            //The atom view looks at the nucleus; field view follows the helix axis.
+            const glm::vec3 magneticUnitDirection =
+                glm::normalize(field.magnetic);
+            const glm::vec3 fieldAxisCenter = magneticUnitDirection *
+                glm::dot(
+                    electrons.front().position,
+                    magneticUnitDirection
+                );
+            const glm::vec3 viewTarget = isAtomOverview ?
+                glm::vec3(0.0f) : fieldAxisCenter;
+            const glm::mat4 view = camera.viewMatrix(viewTarget);
             shader.setMat4("view", view);
-            int framebufferWidth = 0;
-            int framebufferHeight = 0;
-
-            glfwGetFramebufferSize(
-                window,
-                &framebufferWidth,
-                &framebufferHeight
-            );
 
             const float aspectRatio =
                 static_cast<float>(framebufferWidth) /
@@ -697,85 +981,185 @@ int main()
             );
             shader.setMat4("projection", projection);
 
-            //Draw the fixed grid before the electron.
-            const glm::mat4 gridModel(1.0f);
-            shader.setMat4("model", gridModel);
-            shader.setFloat("particleColorWeight", 0.0f);
-            shader.setFloat("brightness", 1.0f);
+            if (isAtomOverview) {
+                //Draw a fixed higher-orbital probability-density overview.
+                const glm::mat4 atomModel(1.0f);
+                shader.setMat4("model", atomModel);
+                shader.setFloat("particleColorWeight", 0.0f);
 
-            glBindVertexArray(gridVertexArrayObject);
-            glDrawArrays(
-                GL_LINES,
-                0,
-                static_cast<GLsizei>(gridVertices.size())
-            );
-            glBindVertexArray(0);
-
-            //Draw the arrows that show the uniform field directions.
-            shader.setFloat("brightness", 1.15f);
-            glBindBuffer(GL_ARRAY_BUFFER, fieldVertexBufferObject);
-            glBufferData(
-                GL_ARRAY_BUFFER,
-                static_cast<GLsizeiptr>(
-                    movingFieldVertices.size() * sizeof(Vertex)
-                ),
-                movingFieldVertices.data(),
-                GL_DYNAMIC_DRAW
-            );
-            glBindVertexArray(fieldVertexArrayObject);
-            glDrawArrays(
-                GL_LINES,
-                0,
-                static_cast<GLsizei>(movingFieldVertices.size())
-            );
-            glBindVertexArray(0);
-
-            //Upload and draw the recent path behind each moving electron.
-            shader.setFloat("brightness", 0.85f);
-            for (std::size_t index = 0;
-                 index < electrons.size();
-                 ++index) {
-                const std::vector<Vertex> trailVertices =
-                    createTrailVertices(electrons[index]);
-
-                glBindBuffer(
-                    GL_ARRAY_BUFFER,
-                    trailVertexBufferObjects[index]
+                shader.setFloat("brightness", 1.0f);
+                glPointSize(2.2f);
+                glBindVertexArray(hydrogenCloudVertexArrayObject);
+                glDrawArrays(
+                    GL_POINTS,
+                    0,
+                    static_cast<GLsizei>(orbitalVertices.size())
                 );
+                glBindVertexArray(0);
+                glPointSize(1.0f);
+
+                //Draw guide planes last so their outlines stay visible.
+                glDisable(GL_DEPTH_TEST);
+                shader.setFloat("brightness", 1.0f);
+                glBindVertexArray(clippingPlaneVertexArrayObject);
+                glDrawArrays(
+                    GL_LINES,
+                    0,
+                    static_cast<GLsizei>(clippingPlaneVertices.size())
+                );
+                glBindVertexArray(0);
+                glEnable(GL_DEPTH_TEST);
+            }
+            else {
+                //Move the field grid with the helix axis as the camera follows it.
+                const glm::mat4 fieldModel = glm::translate(
+                    glm::mat4(1.0f),
+                    fieldAxisCenter
+                );
+                shader.setMat4("model", fieldModel);
+                shader.setFloat("particleColorWeight", 0.0f);
+                shader.setFloat("brightness", 1.0f);
+
+                glBindVertexArray(gridVertexArrayObject);
+                glDrawArrays(
+                    GL_LINES,
+                    0,
+                    static_cast<GLsizei>(gridVertices.size())
+                );
+                glBindVertexArray(0);
+
+                shader.setFloat("brightness", 1.15f);
+                glBindBuffer(GL_ARRAY_BUFFER, fieldVertexBufferObject);
                 glBufferData(
                     GL_ARRAY_BUFFER,
                     static_cast<GLsizeiptr>(
-                        trailVertices.size() * sizeof(Vertex)
+                        movingFieldVertices.size() * sizeof(Vertex)
                     ),
-                    trailVertices.data(),
+                    movingFieldVertices.data(),
                     GL_DYNAMIC_DRAW
                 );
-
-                glBindVertexArray(trailVertexArrayObjects[index]);
+                glBindVertexArray(fieldVertexArrayObject);
                 glDrawArrays(
-                    GL_LINE_STRIP,
+                    GL_LINES,
                     0,
-                    static_cast<GLsizei>(trailVertices.size())
+                    static_cast<GLsizei>(movingFieldVertices.size())
                 );
+                glBindVertexArray(0);
+
+                shader.setMat4("model", glm::mat4(1.0f));
+                shader.setFloat("brightness", 1.35f);
+                for (std::size_t index = 0;
+                     index < electrons.size();
+                     ++index) {
+                    const std::vector<Vertex> trailVertices =
+                        createTrailVertices(
+                            electrons[index],
+                            currentTime
+                        );
+
+                    glBindBuffer(
+                        GL_ARRAY_BUFFER,
+                        trailVertexBufferObjects[index]
+                    );
+                    glBufferData(
+                        GL_ARRAY_BUFFER,
+                        static_cast<GLsizeiptr>(
+                            trailVertices.size() * sizeof(Vertex)
+                        ),
+                        trailVertices.data(),
+                        GL_DYNAMIC_DRAW
+                    );
+
+                    glBindVertexArray(trailVertexArrayObjects[index]);
+                    glDrawArrays(
+                        GL_LINE_STRIP,
+                        0,
+                        static_cast<GLsizei>(trailVertices.size())
+                    );
+                }
+                glBindVertexArray(0);
+
+                for (const Particle& particle : electrons) {
+                    glm::mat4 electronModel(1.0f);
+                    electronModel = glm::translate(
+                        electronModel,
+                        particle.position
+                    );
+
+                    shader.setMat4("model", electronModel);
+                    shader.setVec3("particleColor", particle.color);
+                    shader.setFloat("particleColorWeight", 0.75f);
+                    shader.setFloat("brightness", 1.20f);
+                    electron.draw();
+                }
             }
+
+            //Choose a short part of the trail that is safely behind the sphere.
+            glm::vec2 trailStart(-2.0f, -2.0f);
+            glm::vec2 trailEnd(-2.0f, -2.0f);
+            float distortionStrength = 0.0f;
+            constexpr std::size_t POINTS_BEHIND_ELECTRON = 24;
+            constexpr std::size_t DISTORTION_TRAIL_LENGTH = 28;
+
+            if (!isAtomOverview &&
+                electrons.front().trail.size() >
+                POINTS_BEHIND_ELECTRON + 1) {
+                const std::size_t trailEndIndex =
+                    electrons.front().trail.size() - 1 -
+                    POINTS_BEHIND_ELECTRON;
+                const std::size_t trailStartIndex = trailEndIndex >
+                    DISTORTION_TRAIL_LENGTH ?
+                    trailEndIndex - DISTORTION_TRAIL_LENGTH : 0;
+
+                const glm::vec4 trailStartClip = projection * view *
+                    glm::vec4(
+                        electrons.front().trail[trailStartIndex],
+                        1.0f
+                    );
+                const glm::vec4 trailEndClip = projection * view *
+                    glm::vec4(
+                        electrons.front().trail[trailEndIndex],
+                        1.0f
+                    );
+
+                if (trailStartClip.w > 0.0f &&
+                    trailEndClip.w > 0.0f) {
+                    const glm::vec3 startNormalized =
+                        glm::vec3(trailStartClip) / trailStartClip.w;
+                    const glm::vec3 endNormalized =
+                        glm::vec3(trailEndClip) / trailEndClip.w;
+                    trailStart = glm::vec2(
+                        startNormalized.x * 0.5f + 0.5f,
+                        startNormalized.y * 0.5f + 0.5f
+                    );
+                    trailEnd = glm::vec2(
+                        endNormalized.x * 0.5f + 0.5f,
+                        endNormalized.y * 0.5f + 0.5f
+                    );
+                    distortionStrength = 1.0f;
+                }
+            }
+
+            //Show the hidden scene with a thin distortion along the trail.
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glViewport(0, 0, framebufferWidth, framebufferHeight);
+            glClear(GL_COLOR_BUFFER_BIT);
+            glDisable(GL_DEPTH_TEST);
+            lensShader.use();
+            lensShader.setInt("sceneTexture", 0);
+            lensShader.setVec2("trailStart", trailStart);
+            lensShader.setVec2("trailEnd", trailEnd);
+            lensShader.setFloat("animationTime", currentTime);
+            lensShader.setFloat(
+                "distortionStrength",
+                distortionStrength
+            );
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, sceneColorTexture);
+            glBindVertexArray(screenVertexArrayObject);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
             glBindVertexArray(0);
-
-            //Draw the same sphere mesh once for every simulated electron.
-            for (const Particle& particle : electrons) {
-                glm::mat4 electronModel(1.0f);
-
-                //Move this sphere to the particle's current simulation position.
-                electronModel = glm::translate(
-                    electronModel,
-                    particle.position
-                );
-
-                shader.setMat4("model", electronModel);
-                shader.setVec3("particleColor", particle.color);
-                shader.setFloat("particleColorWeight", 0.75f);
-                shader.setFloat("brightness", 1.20f);
-                electron.draw();
-            }
+            glEnable(GL_DEPTH_TEST);
 
             //Create a readable legend of the values currently driving the scene.
             ImGui::SetNextWindowPos(
@@ -792,8 +1176,24 @@ int main()
                 nullptr,
                 ImGuiWindowFlags_NoCollapse
             );
-            ImGui::Text("Electromagnetic Field");
-            ImGui::Separator();
+
+            if (isAtomOverview) {
+                ImGui::Text("Hydrogen Orbital Probability View");
+                ImGui::Separator();
+                ImGui::Text("Fixed higher-orbital visual");
+                ImGui::Text("Warm points: probability density");
+                ImGui::Text("White outlines: clipping planes");
+                ImGui::Spacing();
+                ImGui::TextDisabled(
+                    "Scroll up to enter the field simulation"
+                );
+                if (ImGui::Button("Zoom into electron field")) {
+                    camera.distance = ATOM_OVERVIEW_DISTANCE - 0.5f;
+                }
+            }
+            else {
+                ImGui::Text("Electromagnetic Field");
+                ImGui::Separator();
 
             ImGui::TextColored(
                 ImVec4(1.0f, 0.66f, 0.18f, 1.0f),
@@ -841,6 +1241,14 @@ int main()
             );
             ImGui::Text("Coloured spheres: electrons");
             ImGui::Text("Coloured paths: trajectories");
+                ImGui::Spacing();
+                ImGui::TextDisabled(
+                    "Scroll down to return to the atom overview"
+                );
+                if (ImGui::Button("Zoom out to atom")) {
+                    camera.distance = ATOM_OVERVIEW_DISTANCE + 0.5f;
+                }
+            }
 
             ImGui::Spacing();
             ImGui::TextDisabled("Drag left mouse: orbit camera");
@@ -858,8 +1266,17 @@ int main()
 
         glDeleteBuffers(1, &gridVertexBufferObject);
         glDeleteVertexArrays(1, &gridVertexArrayObject);
+        glDeleteBuffers(1, &hydrogenCloudVertexBufferObject);
+        glDeleteVertexArrays(1, &hydrogenCloudVertexArrayObject);
+        glDeleteBuffers(1, &clippingPlaneVertexBufferObject);
+        glDeleteVertexArrays(1, &clippingPlaneVertexArrayObject);
         glDeleteBuffers(1, &fieldVertexBufferObject);
         glDeleteVertexArrays(1, &fieldVertexArrayObject);
+        glDeleteBuffers(1, &screenVertexBufferObject);
+        glDeleteVertexArrays(1, &screenVertexArrayObject);
+        glDeleteRenderbuffers(1, &sceneDepthStencilRenderbuffer);
+        glDeleteTextures(1, &sceneColorTexture);
+        glDeleteFramebuffers(1, &sceneFramebuffer);
         glDeleteBuffers(
             static_cast<GLsizei>(trailVertexBufferObjects.size()),
             trailVertexBufferObjects.data()
