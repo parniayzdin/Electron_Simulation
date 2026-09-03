@@ -190,8 +190,3 @@ Run it from the repository root with:
 
 Running from the repository root or from the generated build directory ensures the copied shader files can be found by the executable.
 
-## Continuous integration
-
-Every push to `main` and every pull request targeting `main` runs the GitHub Actions build workflow. The workflow installs the Linux OpenGL development dependencies, configures the project with CMake, and compiles the full `Electron_Simulation` target. A successful workflow produces the green GitHub check associated with the commit and updates the build badge at the top of this README.
-
-The CI job verifies compilation and dependency integration. It does not launch the graphical application because GitHub's hosted runner does not provide the interactive display environment used by the simulator.
