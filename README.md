@@ -106,31 +106,7 @@ $$
 P(r,\theta,\phi)\propto |\psi_{n\ell m}(r,\theta,\phi)|^2.
 $$
 
-The radial factor implemented in `src/AtomOverview.cpp` has the hydrogenic form
-
-$$
-R_{n\ell}(r)\propto e^{-\rho/2}\rho^{\ell}L_{n-\ell-1}^{2\ell+1}(\rho),
-\qquad
-\rho=\frac{2r}{n},
-$$
-
-using normalized length units. The angular structure uses an associated Legendre polynomial together with a real azimuthal component:
-
-$$
-Y(\theta,\phi)\propto P_{\ell}^{|m|}(\cos\theta)\cos(m\phi).
-$$
-
-The program evaluates these factors numerically, builds cumulative probability distributions, and samples 65,000 three-dimensional positions. In spherical coordinates, sampled points are converted to Cartesian coordinates through
-
-$$
-x=r\sin\theta\cos\phi,
-\qquad
-y=r\cos\theta,
-\qquad
-z=r\sin\theta\sin\phi.
-$$
-
-Regions with greater calculated density receive more points. Point color is a visualization mapping of relative density and is not itself a physical observable. Three reference planes are also rendered to make the orbital geometry easier to interpret from different camera angles.
+The program evaluates the hydrogen orbital numerically and samples 65,000 three-dimensional positions from the resulting probability distribution. Regions with greater calculated probability density receive more points, producing the visible orbital cloud. Point color is used only as a visualization of relative density and is not itself a physical observable. Three reference planes are also rendered to make the orbital geometry easier to interpret from different camera angles.
 
 ## Rendering architecture
 
@@ -189,4 +165,3 @@ Run it from the repository root with:
 ```
 
 Running from the repository root or from the generated build directory ensures the copied shader files can be found by the executable.
-
