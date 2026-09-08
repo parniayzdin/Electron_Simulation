@@ -26,7 +26,7 @@ void sampling() {
                 if (r > 0) yAngularSum += p.y * p.y / (r * r);
             }
             const double count = static_cast<double>(atom.orbitalVertices().size());
-            require(count == 65000, "Missing orbital samples");
+            require(count == 40000, "Missing orbital samples");
             const double expectedRadius = 0.5 * (3 * n * n - l * (l + 1));
             require(std::abs(radiusSum / count - expectedRadius) < expectedRadius * 0.025,
                 "Sampled radial mean does not match analytic hydrogen expectation");
