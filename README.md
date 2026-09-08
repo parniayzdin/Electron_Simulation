@@ -2,6 +2,13 @@
 
 A C++17 / OpenGL visualization of hydrogen. Zoom from the original orbital overview into the same atom, with small circular cloud dots and a dotted proton at the center. Zooming no longer switches to the magnetic-field scene.
 
+
+<h2>Demo</h2>
+
+<p align="center">
+  <img src="assets/demo.gif" alt="Hydrogen Atom Explorer Demo" width="900">
+</p>
+
 ## Run
 
 On Windows with Ubuntu / WSLg, double-click **Launch Hydrogen Atom.cmd**. It builds and starts the application using your existing Ubuntu installation.
@@ -40,12 +47,7 @@ The orbital picker offers 1s, 2s, 2p, two 3d views, and the original 4f cloud. Z
 ## What you are seeing
 
 Hydrogen has **one proton and one electron**. The 65,000 cloud dots sample possible locations of that one electron; they are not separate electrons or a trajectory. Their density follows the squared hydrogen wavefunction, including the spherical volume element when sampling. A fixed random seed keeps the cloud stable while you explore it.
-
-For nonzero |m|, the displayed shape is a real cosine combination of the +m and -m states. The Y axis is the polar axis. Dots are sized for visibility at both overview and close-up distances. The size control scales their minimum and maximum screen size. Brightness scales both color and opacity, so dense centers dim and zero hides the dots. Standard alpha blending prevents additive white hotspots. Color and brightness help visualize the density; they are not quantitative measurements.
-
-The proton is **enlarged for visibility**. Its 2,400 dots form a visual texture, not individual physical particles or quarks. Camera distances use the cloud scale of 0.16 world units per Bohr radius (a0), while the proton marker has an illustrative radius of 0.065 world units.
-
-Higher orbitals such as 4f have very little electron probability near the nucleus, so empty regions are expected. Choose 1s for a cloud concentrated near the center. Slow orbit moves only the camera; the probability distribution stays stationary.
+For nonzero |m|, the displayed shape is a real cosine combination of the +m and -m states. The Y axis is the polar axis. Dots are sized for visibility at both overview and close-up distances. The size control scales their minimum and maximum screen size. Brightness scales both color and opacity, so dense centers dim and zero hides the dots. Standard alpha blending prevents additive white hotspots. Color and brightness help visualize the density; they are not quantitative measurements. The proton is **enlarged for visibility**. Its 2,400 dots form a visual texture, not individual physical particles or quarks. Camera distances use the cloud scale of 0.16 world units per Bohr radius (a0), while the proton marker has an illustrative radius of 0.065 world units. Higher orbitals such as 4f have very little electron probability near the nucleus, so empty regions are expected. Choose 1s for a cloud concentrated near the center. Slow orbit moves only the camera; the probability distribution stays stationary.
 
 Background: [OpenStax: The Hydrogen Atom](https://openstax.org/books/university-physics-volume-3/pages/8-1-the-hydrogen-atom).
 
