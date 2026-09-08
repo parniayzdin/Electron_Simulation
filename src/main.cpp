@@ -142,18 +142,19 @@ int run(GLFWwindow* window, OrbitCamera& camera, const char* argv0,
     };
     loadOrbital();
 
-    bool showNucleus = true, showGuides = false, cutaway = false, autoRotate = false;
-    float cloudOpacity = 0.38f, dotSize = 1.0f, cutPosition = 0.0f;
+    bool showNucleus = true, showGuides = false, cutaway = false, autoRotate = true;
+    float brightness = 0.65f, dotSize = 1.0f, cutPosition = 0.0f;
     float pointSizeRange[2] = {1.0f, 1.0f};
     glGetFloatv(GL_ALIASED_POINT_SIZE_RANGE, pointSizeRange);
-    const float maxPointSize = std::min(7.0f, pointSizeRange[1]);
+    const float maxPointSize = std::min(48.0f, pointSizeRange[1]);
     double previousTime = glfwGetTime();
     int smokeFrame = 0;
     if (!smokeDirectory.empty()) std::filesystem::create_directories(smokeDirectory);
-    const std::array<float, 6> smokeDistances {{12.0f, 9.8f, 3.0f, 0.38f, 0.28f, 1.8f}};
-    const std::array<const char*, 6> smokeNames {{
+    const std::array<float, 9> smokeDistances {{12.0f, 9.8f, 3.0f, 0.38f, 0.28f, 1.8f, 12.0f, 12.0f, 12.0f}};
+    const std::array<const char*, 9> smokeNames {{
         "01-overview.ppm", "02-former-switch.ppm", "03-interior.ppm",
-        "04-proton.ppm", "05-minimum-zoom.ppm", "06-ground-state.ppm"
+        "04-proton.ppm", "05-minimum-zoom.ppm", "06-ground-state.ppm",
+        "07-dim.ppm", "08-dark.ppm", "09-large-dots.ppm"
     }};
 
     while (!glfwWindowShouldClose(window)) {
@@ -174,9 +175,12 @@ int run(GLFWwindow* window, OrbitCamera& camera, const char* argv0,
             camera.distance = camera.requestedDistance = smokeDistances[smokeFrame];
             cutaway = smokeFrame == 2;
             if (smokeFrame == 5) { selectedOrbital = 0; loadOrbital(); }
+            if (smokeFrame == 6) { selectedOrbital = 5; loadOrbital(); brightness = 0.10f; }
+            if (smokeFrame == 7) brightness = 0.0f;
+            if (smokeFrame == 8) { brightness = 0.65f; dotSize = 3.0f; }
         }
         camera.update(dt);
-        if (autoRotate && !camera.isDragging)
+        if (autoRotate && !camera.isDragging && smokeDirectory.empty())
             camera.yawDegrees = std::remainder(camera.yawDegrees + 9.0f * dt, 360.0f);
 
         ImGui_ImplOpenGL3_NewFrame();
@@ -243,9 +247,9 @@ int run(GLFWwindow* window, OrbitCamera& camera, const char* argv0,
         ImGui::Checkbox("Slow orbit", &autoRotate);
         ImGui::Text("Dot appearance");
         ImGui::SetNextItemWidth(-1);
-        ImGui::SliderFloat("##density", &cloudOpacity, 0.03f, 0.85f, "Brightness %.2f");
+        ImGui::SliderFloat("##density", &brightness, 0.0f, 1.0f, "Brightness %.2f");
         ImGui::SetNextItemWidth(-1);
-        ImGui::SliderFloat("##dots", &dotSize, 0.5f, 2.0f, "Dot size %.1f");
+        ImGui::SliderFloat("##dots", &dotSize, 0.5f, 4.0f, "Dot size %.1f");
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::TextColored(ImVec4(1, 0.48f, 0.17f, 1), "Orange center: one proton");
@@ -273,17 +277,19 @@ int run(GLFWwindow* window, OrbitCamera& camera, const char* argv0,
 
         glEnable(GL_PROGRAM_POINT_SIZE);
         glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-        // The cloud integrates probability along the view; no order-dependent occlusion.
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        // Alpha compositing keeps overlapping dots from adding up to clipped white.
         glDisable(GL_DEPTH_TEST);
         glDepthMask(GL_FALSE);
         points.use();
         points.setMat4("view", view);
         points.setMat4("projection", projection);
         points.setFloat("viewportHeight", static_cast<float>(height));
-        points.setFloat("maxPointSize", maxPointSize);
-        points.setFloat("dotRadius", 0.014f * dotSize);
-        points.setFloat("opacity", cloudOpacity);
+        points.setFloat("maxPointSize", std::min(12.0f * dotSize, maxPointSize));
+        points.setFloat("minPointSize", std::min(2.2f * dotSize, maxPointSize));
+        points.setFloat("brightness", brightness);
+        points.setFloat("dotRadius", 0.020f * dotSize);
+        points.setFloat("opacity", 0.85f);
         points.setInt("cutaway", cutaway ? 1 : 0);
         points.setFloat("cutPosition", cutPosition);
         cloud.draw();

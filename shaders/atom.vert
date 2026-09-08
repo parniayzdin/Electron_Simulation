@@ -8,11 +8,12 @@ uniform mat4 projection;
 uniform float viewportHeight;
 uniform float dotRadius;
 uniform float maxPointSize;
+uniform float minPointSize;
 void main() {
     vec4 eye = view * vec4(position, 1.0);
     gl_Position = projection * eye;
     gl_PointSize = clamp(dotRadius * viewportHeight * projection[1][1] /
-        max(-eye.z, 0.001), 1.5, maxPointSize);
+        max(-eye.z, 0.001), minPointSize, maxPointSize);
     pointColor = color;
     worldX = position.x;
 }

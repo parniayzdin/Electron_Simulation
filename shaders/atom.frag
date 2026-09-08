@@ -3,6 +3,7 @@ in vec3 pointColor;
 in float worldX;
 out vec4 finalColor;
 uniform float opacity;
+uniform float brightness;
 uniform int cutaway;
 uniform float cutPosition;
 void main() {
@@ -11,5 +12,5 @@ void main() {
     float r2 = dot(local, local);
     if (r2 > 1.0) discard;
     float coverage = 1.0 - smoothstep(0.15, 1.0, r2);
-    finalColor = vec4(pointColor, opacity * coverage);
+    finalColor = vec4(pointColor * brightness, opacity * coverage * brightness);
 }
