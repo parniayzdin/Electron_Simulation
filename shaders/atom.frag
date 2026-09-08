@@ -11,6 +11,8 @@ void main() {
     vec2 local = gl_PointCoord * 2.0 - 1.0;
     float r2 = dot(local, local);
     if (r2 > 1.0) discard;
-    float coverage = 1.0 - smoothstep(0.15, 1.0, r2);
-    finalColor = vec4(pointColor * brightness, opacity * coverage * brightness);
+    // Filled disks with only a narrow soft edge, rather than translucent glows.
+    float coverage = 1.0 - smoothstep(0.72, 1.0, r2);
+    float visibility = clamp(brightness * 10.0, 0.0, 1.0);
+    finalColor = vec4(pointColor * brightness, opacity * coverage * visibility);
 }

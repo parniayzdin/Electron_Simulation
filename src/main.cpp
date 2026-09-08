@@ -143,7 +143,7 @@ int run(GLFWwindow* window, OrbitCamera& camera, const char* argv0,
     loadOrbital();
 
     bool showNucleus = true, showGuides = false, cutaway = false, autoRotate = true;
-    float brightness = 0.65f, dotSize = 1.0f, cutPosition = 0.0f;
+    float brightness = 0.65f, dotSize = 1.25f, cutPosition = 0.0f;
     float pointSizeRange[2] = {1.0f, 1.0f};
     glGetFloatv(GL_ALIASED_POINT_SIZE_RANGE, pointSizeRange);
     const float maxPointSize = std::min(48.0f, pointSizeRange[1]);
@@ -289,14 +289,14 @@ int run(GLFWwindow* window, OrbitCamera& camera, const char* argv0,
         points.setFloat("minPointSize", std::min(2.2f * dotSize, maxPointSize));
         points.setFloat("brightness", brightness);
         points.setFloat("dotRadius", 0.020f * dotSize);
-        points.setFloat("opacity", 0.85f);
+        points.setFloat("opacity", 0.95f);
         points.setInt("cutaway", cutaway ? 1 : 0);
         points.setFloat("cutPosition", cutPosition);
         cloud.draw();
         if (showNucleus) {
             points.setInt("cutaway", 0);
             points.setFloat("dotRadius", 0.0015f * dotSize);
-            points.setFloat("opacity", 0.64f);
+            points.setFloat("opacity", 0.90f);
             nucleus.draw();
         }
         glDepthMask(GL_TRUE);
