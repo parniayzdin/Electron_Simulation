@@ -1,26 +1,97 @@
-# Hydrogen Atom Explorer
+<div align="center">
+  <h1>Hydrogen Atom Explorer</h1>
+</div>
 
-A C++17 / OpenGL visualization of hydrogen. Zoom from the original orbital overview into the same atom, with small circular cloud dots and a dotted proton at the center. Zooming no longer switches to the magnetic-field scene.
+I built this project to turn the hydrogen atom from something I had mostly seen as equations into something I could actually explore. It is a C++17 and OpenGL visualization that renders a 65,000 point probability cloud and lets me move from an orbital overview into the same atom, inspect the cloud from inside, and zoom toward the proton.
 
-
-<h2>Demo</h2>
+## Demo
 
 <p align="center">
   <img src="assets/demo.gif" alt="Hydrogen Atom Explorer Demo" width="900">
 </p>
 
+## What I built
+
+I represent the electron as a probability cloud rather than as a particle travelling along a fixed orbit. The 65,000 dots are sampled possible locations of the same electron, so denser regions correspond to locations where the electron is more likely to be found.
+
+I also added multiple hydrogen orbitals, camera controls, close up views, a cutaway mode, adjustable point size and brightness, and a Dear ImGui control panel. I enlarged the proton for visibility so the nucleus remains easy to inspect while zooming.
+
+## Physics behind the visualization
+
+The visualization starts from the hydrogen wavefunction. I treat the orbital as a radial part multiplied by an angular part:
+
+$$
+\psi_{n\ell m}(r,\theta,\phi)=R_{n\ell}(r)Y_{\ell m}(\theta,\phi).
+$$
+
+What I visualize is the probability density, which is proportional to the magnitude squared of that wavefunction:
+
+$$
+P(r,\theta,\phi)\propto |\psi_{n\ell m}(r,\theta,\phi)|^2.
+$$
+
+For the radial component, I use the hydrogenic form implemented in `src/AtomOverview.cpp`:
+
+$$
+R_{n\ell}(r)\propto e^{-\rho/2}\rho^{\ell}L_{n-\ell-1}^{2\ell+1}(\rho),
+\qquad
+\rho=\frac{2r}{n}.
+$$
+
+For the angular structure, I use associated Legendre polynomials together with a real azimuthal component:
+
+$$
+Y(\theta,\phi)\propto P_{\ell}^{|m|}(\cos\theta)\cos(m\phi).
+$$
+
+I evaluate these factors numerically and sample 65,000 three dimensional positions from the resulting probability distribution. After sampling in spherical coordinates, I convert each point into Cartesian coordinates for OpenGL:
+
+$$
+x=r\sin\theta\cos\phi,
+\qquad
+y=r\cos\theta,
+\qquad
+z=r\sin\theta\sin\phi.
+$$
+
+This is why different orbitals produce different cloud shapes. Regions with greater calculated probability density receive more points. I use color and brightness to make that density easier to see, but those colors are visual aids rather than physical measurements.
+
+For nonzero |m| states, I display a real cosine combination of the +m and -m states. The Y axis is the polar axis.
+
+## Rendering
+
+I upload the sampled points to OpenGL buffers and render the cloud on the GPU. GLFW manages the window and OpenGL context, GLEW loads the OpenGL functions, GLM handles camera and matrix math, and Dear ImGui provides the interactive controls.
+
+I use a fixed random seed so the generated cloud stays stable while I move the camera. Zooming and orbiting therefore change the viewpoint without regenerating the probability distribution.
+
+The proton uses 2,400 dots as a visual texture. Those dots are not individual physical particles or quarks, and the proton marker is intentionally enlarged so it remains visible beside the orbital cloud.
+
+## Controls
+
+- **Scroll:** zoom in or out
+- **Left drag:** orbit around the atom
+- **Whole atom / H:** return to the orbital overview
+- **Inside cloud:** move into the probability cloud
+- **Nucleus close up / N:** focus on the proton
+- **Cutaway:** remove the positive X side of the cloud to reveal the interior
+- **Space / Slow orbit:** toggle automatic camera rotation
+- **Brightness / Dot size:** adjust the rendered cloud
+- **Esc:** close the application
+
+The orbital picker includes 1s, 2s, 2p, two 3d views, and the original 4f cloud. Zooming keeps the selected orbital active.
+
 ## Run
 
-On Windows with Ubuntu / WSLg, double-click **Launch Hydrogen Atom.cmd**. It builds and starts the application using your existing Ubuntu installation.
+On Windows with Ubuntu / WSLg, double click **Launch Hydrogen Atom.cmd**. It builds and starts the application using the existing Ubuntu installation.
 
-For a fresh installation, install the dependencies in Ubuntu first:
+For a fresh Ubuntu installation:
 
 ```bash
 sudo apt update
 sudo apt install -y build-essential cmake pkg-config libglfw3-dev libglew-dev libglm-dev libgl1-mesa-dev
 ```
 
-Or build and run directly in Ubuntu / WSL:
+Then build and run:
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -28,29 +99,21 @@ cmake --build build --parallel 4
 ./build/Electron_Simulation
 ```
 
-Requires CMake 3.24+, a C++17 compiler, and OpenGL 3.3. Dear ImGui v1.91.6 downloads automatically during the first build. Shaders are copied beside the executable.
+The project requires CMake 3.24+, a C++17 compiler, and OpenGL 3.3. Dear ImGui v1.91.6 downloads automatically during the first build.
 
-## Controls
+## Testing
 
-- **Scroll:** smoothly zoom in or out.
-- **Left drag:** orbit the atom.
-- **Whole atom / H:** return to the overview.
-- **Inside cloud:** inspect the same probability cloud from closer up.
-- **Nucleus close-up / N:** focus on the dotted proton.
-- **Cutaway:** reveal the interior by removing the +X side of the cloud.
-- **Space / Slow orbit:** toggle gentle camera rotation (on by default).
-- **Brightness / Dot size:** adjust the circular dots.
-- **Esc:** close.
+I added automated checks for all 20 supported real cosine states through n=4, analytic mean radius, 1s isotropy, 2p angular distribution, finite geometry, and camera zoom behavior.
 
-The orbital picker offers 1s, 2s, 2p, two 3d views, and the original 4f cloud. Zooming preserves the selected orbital. The panel scrolls on smaller windows.
+```bash
+ctest --test-dir build --output-on-failure
+./build/Electron_Simulation --smoke-test build/captures
+```
 
-## What you are seeing
+I also use GitHub Actions to run the automated checks in CI.
 
-Hydrogen has **one proton and one electron**. The 65,000 cloud dots sample possible locations of that one electron; they are not separate electrons or a trajectory. Their density follows the squared hydrogen wavefunction, including the spherical volume element when sampling. A fixed random seed keeps the cloud stable while you explore it.
-For nonzero |m|, the displayed shape is a real cosine combination of the +m and -m states. The Y axis is the polar axis. Dots are sized for visibility at both overview and close-up distances. The size control scales their minimum and maximum screen size. Brightness scales both color and opacity, so dense centers dim and zero hides the dots. Standard alpha blending prevents additive white hotspots. Color and brightness help visualize the density; they are not quantitative measurements. The proton is **enlarged for visibility**. Its 2,400 dots form a visual texture, not individual physical particles or quarks. Camera distances use the cloud scale of 0.16 world units per Bohr radius (a0), while the proton marker has an illustrative radius of 0.065 world units. Higher orbitals such as 4f have very little electron probability near the nucleus, so empty regions are expected. Choose 1s for a cloud concentrated near the center. Slow orbit moves only the camera; the probability distribution stays stationary.
+## Notes
 
-Background: [OpenStax: The Hydrogen Atom](https://openstax.org/books/university-physics-volume-3/pages/8-1-the-hydrogen-atom).
+Hydrogen has one proton and one electron. The cloud dots are not separate electrons and do not represent a trajectory. Higher orbitals such as 4f naturally have very little probability near the nucleus, while 1s is much more concentrated near the center.
 
-Tests check all 20 supported real cosine states through n=4, analytic mean radius, 1s isotropy, 2p angular distribution, finite geometry, and camera zoom bounds and smoothing. The render check captures nine views, including the former scene-switch distance, interior, proton, minimum zoom, brightness reduction, zero brightness, and larger dots, and fails on OpenGL errors. Use `xvfb-run -a` before the executable on headless Linux. GitHub Actions runs both checks.
-
-The active app uses `main.cpp`, `AtomOverview.cpp`, `OrbitCamera.hpp`, `Shader.cpp`, and the atom shaders. Earlier classical physics modules and standalone experiments remain in the repository for reference.
+For more background on the physics, I used [OpenStax: The Hydrogen Atom](https://openstax.org/books/university-physics-volume-3/pages/8-1-the-hydrogen-atom) as a reference.
