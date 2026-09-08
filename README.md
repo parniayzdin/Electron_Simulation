@@ -2,7 +2,7 @@
   <h1>Hydrogen Atom Explorer</h1>
 </div>
 
-I built this project to turn the hydrogen atom from something I had mostly seen as equations into something I could actually explore. It is a C++17 and OpenGL visualization that renders a 65,000 point probability cloud and lets me move from an orbital overview into the same atom, inspect the cloud from inside, and zoom toward the proton.
+I built this project to turn the hydrogen atom from something I had mostly seen as equations into something I could actually explore. It is a C++17 and OpenGL visualization that renders a 40,000 point probability cloud and lets me move from an orbital overview into the same atom, inspect the cloud from inside, and zoom toward the proton.
 
 ## Demo
 
@@ -12,7 +12,7 @@ I built this project to turn the hydrogen atom from something I had mostly seen 
 
 ## What I built
 
-I represent the electron as a probability cloud rather than as a particle travelling along a fixed orbit. The 65,000 dots are sampled possible locations of the same electron, so denser regions correspond to locations where the electron is more likely to be found. I also added multiple hydrogen orbitals, camera controls, close up views, a cutaway mode, adjustable point size and brightness, and a Dear ImGui control panel. I enlarged the proton for visibility so the nucleus remains easy to inspect while zooming.
+I represent the electron as a probability cloud rather than as a particle travelling along a fixed orbit. The 40,000 dots are sampled possible locations of the same electron, so denser regions correspond to locations where the electron is more likely to be found. I also added multiple hydrogen orbitals, camera controls, close up views, a cutaway mode, adjustable point size and brightness, and a Dear ImGui control panel. I enlarged the proton for visibility so the nucleus remains easy to inspect while zooming.
 
 ## Physics behind the visualization
 
@@ -28,7 +28,7 @@ $$
 P \propto |\psi|^2
 $$
 
-That probability is what drives the shape of the cloud. Regions with higher probability receive more points, which is why the orbital appears denser in some areas and nearly empty in others. I sample 65,000 three dimensional points from that probability distribution and convert them into positions OpenGL can render. Different orbitals change the probability pattern, which produces the different cloud shapes shown in the application.
+That probability is what drives the shape of the cloud. Regions with higher probability receive more points, which is why the orbital appears denser in some areas and nearly empty in others. I sample 40,000 three dimensional points from that probability distribution and convert them into positions OpenGL can render. Different orbitals change the probability pattern, which produces the different cloud shapes shown in the application.
 
 ## Rendering
 
