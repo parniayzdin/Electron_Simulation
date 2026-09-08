@@ -18,45 +18,23 @@ I also added multiple hydrogen orbitals, camera controls, close up views, a cuta
 
 ## Physics behind the visualization
 
-The visualization starts from the hydrogen wavefunction. I treat the orbital as a radial part multiplied by an angular part:
+The main idea I use is that the electron is described by a wavefunction, usually written as:
 
 $$
-\psi_{n\ell m}(r,\theta,\phi)=R_{n\ell}(r)Y_{\ell m}(\theta,\phi).
+\psi(r,\theta,\phi)
 $$
 
-What I visualize is the probability density, which is proportional to the magnitude squared of that wavefunction:
+I do not draw the wavefunction directly. Instead, I use its squared magnitude to represent where the electron is more likely to be found:
 
 $$
-P(r,\theta,\phi)\propto |\psi_{n\ell m}(r,\theta,\phi)|^2.
+P \propto |\psi|^2
 $$
 
-For the radial component, I use the hydrogenic form implemented in `src/AtomOverview.cpp`:
+That probability is what drives the shape of the cloud. Regions with higher probability receive more points, which is why the orbital appears denser in some areas and nearly empty in others.
 
-$$
-R_{n\ell}(r)\propto e^{-\rho/2}\rho^{\ell}L_{n-\ell-1}^{2\ell+1}(\rho),
-\qquad
-\rho=\frac{2r}{n}.
-$$
+I sample 65,000 three dimensional points from that probability distribution and convert them into positions OpenGL can render. Different orbitals change the probability pattern, which produces the different cloud shapes shown in the application.
 
-For the angular structure, I use associated Legendre polynomials together with a real azimuthal component:
-
-$$
-Y(\theta,\phi)\propto P_{\ell}^{|m|}(\cos\theta)\cos(m\phi).
-$$
-
-I evaluate these factors numerically and sample 65,000 three dimensional positions from the resulting probability distribution. After sampling in spherical coordinates, I convert each point into Cartesian coordinates for OpenGL:
-
-$$
-x=r\sin\theta\cos\phi,
-\qquad
-y=r\cos\theta,
-\qquad
-z=r\sin\theta\sin\phi.
-$$
-
-This is why different orbitals produce different cloud shapes. Regions with greater calculated probability density receive more points. I use color and brightness to make that density easier to see, but those colors are visual aids rather than physical measurements.
-
-For nonzero |m| states, I display a real cosine combination of the +m and -m states. The Y axis is the polar axis.
+I use color and brightness only to make the density easier to see. They are visual aids and do not represent a physical measurement.
 
 ## Rendering
 
