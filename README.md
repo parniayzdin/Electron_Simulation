@@ -51,13 +51,6 @@ For nonzero |m|, the displayed shape is a real cosine combination of the +m and 
 
 Background: [OpenStax: The Hydrogen Atom](https://openstax.org/books/university-physics-volume-3/pages/8-1-the-hydrogen-atom).
 
-## Checks
-
-```bash
-ctest --test-dir build --output-on-failure
-./build/Electron_Simulation --smoke-test build/captures
-```
-
 Tests check all 20 supported real cosine states through n=4, analytic mean radius, 1s isotropy, 2p angular distribution, finite geometry, and camera zoom bounds and smoothing. The render check captures nine views, including the former scene-switch distance, interior, proton, minimum zoom, brightness reduction, zero brightness, and larger dots, and fails on OpenGL errors. Use `xvfb-run -a` before the executable on headless Linux. GitHub Actions runs both checks.
 
 The active app uses `main.cpp`, `AtomOverview.cpp`, `OrbitCamera.hpp`, `Shader.cpp`, and the atom shaders. Earlier classical physics modules and standalone experiments remain in the repository for reference.
