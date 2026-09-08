@@ -30,11 +30,7 @@ $$
 P \propto |\psi|^2
 $$
 
-That probability is what drives the shape of the cloud. Regions with higher probability receive more points, which is why the orbital appears denser in some areas and nearly empty in others.
-
-I sample 65,000 three dimensional points from that probability distribution and convert them into positions OpenGL can render. Different orbitals change the probability pattern, which produces the different cloud shapes shown in the application.
-
-I use color and brightness only to make the density easier to see. They are visual aids and do not represent a physical measurement.
+That probability is what drives the shape of the cloud. Regions with higher probability receive more points, which is why the orbital appears denser in some areas and nearly empty in others. I sample 65,000 three dimensional points from that probability distribution and convert them into positions OpenGL can render. Different orbitals change the probability pattern, which produces the different cloud shapes shown in the application.
 
 ## Rendering
 
