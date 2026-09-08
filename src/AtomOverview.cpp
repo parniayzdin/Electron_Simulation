@@ -5,16 +5,12 @@
 #include <algorithm>
 #include <cmath>
 #include <random>
+#include <stdexcept>
 #include <vector>
 
 namespace {
 
-constexpr int PRINCIPAL_NUMBER = 4;
-constexpr int ANGULAR_NUMBER = 3;
-constexpr int MAGNETIC_NUMBER = 2;
-constexpr std::size_t POINT_COUNT = 65000;
-constexpr float MAX_SAMPLE_RADIUS = 28.0f;
-constexpr float WORLD_SCALE = 0.16f;
+constexpr std::size_t POINT_COUNT = 180000;
 constexpr float PI = 3.14159265f;
 
 float associatedLaguerre(int order, int alpha, float value)
@@ -75,24 +71,20 @@ float associatedLegendre(int degree, int order, float value)
     return pmmp1;
 }
 
-float orbitalDensity(float radius, float theta, float phi)
+float radialDensity(int n, int l, float radius)
 {
-    const float rho = 2.0f * radius / PRINCIPAL_NUMBER;
-    const int laguerreOrder =
-        PRINCIPAL_NUMBER - ANGULAR_NUMBER - 1;
-    const int laguerreAlpha = 2 * ANGULAR_NUMBER + 1;
+    const float rho = 2.0f * radius / n;
+    const float wave = std::exp(-rho * 0.5f) *
+        std::pow(rho, static_cast<float>(l)) *
+        associatedLaguerre(n - l - 1, 2 * l + 1, rho);
+    return wave * wave;
+}
 
-    const float radialWave = std::exp(-rho * 0.5f) *
-        std::pow(rho, static_cast<float>(ANGULAR_NUMBER)) *
-        associatedLaguerre(laguerreOrder, laguerreAlpha, rho);
-
-    const float angularWave = associatedLegendre(
-        ANGULAR_NUMBER,
-        std::abs(MAGNETIC_NUMBER),
-        std::cos(theta)
-    ) * std::cos(MAGNETIC_NUMBER * phi);
-
-    return radialWave * radialWave * angularWave * angularWave;
+float angularDensity(int l, int m, float theta, float phi)
+{
+    const float wave = associatedLegendre(l, std::abs(m), std::cos(theta)) *
+        std::cos(m * phi);
+    return wave * wave;
 }
 
 std::vector<float> buildCdf(const std::vector<float>& weights)
@@ -104,6 +96,9 @@ std::vector<float> buildCdf(const std::vector<float>& weights)
         sum += weights[index];
         cdf[index] = sum;
     }
+
+    if (!(sum > 0.0f) || !std::isfinite(sum))
+        throw std::runtime_error("Invalid orbital probability distribution.");
 
     for (float& value : cdf) {
         value /= sum;
@@ -124,10 +119,14 @@ float sampleCdf(
         cdf.end(),
         target
     );
-    const std::size_t index = static_cast<std::size_t>(
+    const std::size_t index = std::min(static_cast<std::size_t>(
         std::distance(cdf.begin(), iterator)
-    );
-    return maximumValue * static_cast<float>(index) /
+    ), cdf.size() - 1);
+    if (index == 0) return 0.0f;
+    const float previous = cdf[index - 1];
+    const float weight = cdf[index] - previous;
+    const float fraction = weight > 0.0f ? (target - previous) / weight : 0.0f;
+    return maximumValue * (static_cast<float>(index - 1) + fraction) /
         static_cast<float>(cdf.size() - 1);
 }
 
@@ -202,8 +201,11 @@ void addPlaneOutline(
 
 } //namespace
 
-AtomOverview::AtomOverview()
+AtomOverview::AtomOverview(int n, int l, int m) : n_(n)
 {
+    if (n < 1 || n > 4 || l < 0 || l >= n || m < 0 || m > l)
+        throw std::invalid_argument("Expected 1 <= n <= 4, 0 <= l < n, 0 <= m <= l.");
+    const float maxSampleRadius = 4.0f * n * n + 12.0f;
     constexpr int RADIAL_SAMPLES = 2048;
     constexpr int THETA_SAMPLES = 1024;
     constexpr int PHI_SAMPLES = 720;
@@ -213,24 +215,24 @@ AtomOverview::AtomOverview()
     std::vector<float> phiWeights(PHI_SAMPLES);
 
     for (int index = 0; index < RADIAL_SAMPLES; ++index) {
-        const float radius = MAX_SAMPLE_RADIUS * index /
+        const float radius = maxSampleRadius * index /
             static_cast<float>(RADIAL_SAMPLES - 1);
-        const float radialPart = orbitalDensity(radius, PI * 0.5f, 0.0f);
+        const float radialPart = radialDensity(n, l, radius);
         radialWeights[index] = radius * radius * radialPart;
     }
 
     for (int index = 0; index < THETA_SAMPLES; ++index) {
         const float theta = PI * index /
             static_cast<float>(THETA_SAMPLES - 1);
-        const float angularPart = orbitalDensity(12.0f, theta, 0.0f);
+        const float angularPart = angularDensity(l, m, theta, 0.0f);
         thetaWeights[index] = std::sin(theta) * angularPart;
     }
 
     for (int index = 0; index < PHI_SAMPLES; ++index) {
         const float phi = 2.0f * PI * index /
             static_cast<float>(PHI_SAMPLES - 1);
-        phiWeights[index] = std::cos(MAGNETIC_NUMBER * phi) *
-            std::cos(MAGNETIC_NUMBER * phi);
+        phiWeights[index] = std::cos(m * phi) *
+            std::cos(m * phi);
     }
 
     const std::vector<float> radialCdf = buildCdf(radialWeights);
@@ -247,15 +249,15 @@ AtomOverview::AtomOverview()
     for (std::size_t index = 0; index < POINT_COUNT; ++index) {
         const float radius = sampleCdf(
             radialCdf,
-            MAX_SAMPLE_RADIUS,
+            maxSampleRadius,
             generator
         );
         const float theta = sampleCdf(thetaCdf, PI, generator);
         const float phi = sampleCdf(phiCdf, 2.0f * PI, generator);
-        const float density = orbitalDensity(radius, theta, phi);
+        const float density = radialDensity(n, l, radius) * angularDensity(l, m, theta, phi);
         const float sinTheta = std::sin(theta);
 
-        positions.push_back(WORLD_SCALE * radius * glm::vec3(
+        positions.push_back(worldScale * radius * glm::vec3(
             sinTheta * std::cos(phi),
             std::cos(theta),
             sinTheta * std::sin(phi)
@@ -277,6 +279,20 @@ AtomOverview::AtomOverview()
             {position.x, position.y, position.z},
             {color.r, color.g, color.b}
         });
+    }
+
+    // Dots form one proton marker, not individual nucleons or quarks.
+    constexpr int nucleusPoints = 2400;
+    constexpr float goldenAngle = 2.39996323f;
+    for (int i = 0; i < nucleusPoints; ++i) {
+        const float y = 1.0f - 2.0f * (i + 0.5f) / nucleusPoints;
+        const float ring = std::sqrt(1.0f - y * y);
+        const float angle = i * goldenAngle;
+        const glm::vec3 p = protonDisplayRadius *
+            glm::vec3(ring * std::cos(angle), y, ring * std::sin(angle));
+        const float light = 0.55f + 0.45f * (y + 1.0f) * 0.5f;
+        nucleusVertices_.push_back({
+            {p.x, p.y, p.z}, {1.0f, 0.22f + 0.42f * light, 0.12f}});
     }
 
     //Three intersecting planes create the clipped-orbital framing.
@@ -305,4 +321,14 @@ const std::vector<Vertex>& AtomOverview::orbitalVertices() const
 const std::vector<Vertex>& AtomOverview::clippingPlaneVertices() const
 {
     return clippingPlaneVertices_;
+}
+
+float AtomOverview::overviewDistance() const
+{
+    return std::max(1.8f, 0.75f * n_ * n_);
+}
+
+const std::vector<Vertex>& AtomOverview::nucleusVertices() const
+{
+    return nucleusVertices_;
 }

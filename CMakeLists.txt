@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.24)
 project(Electron_Simulation VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -56,11 +56,11 @@ add_executable(Electron_Simulation
     src/main.cpp
     src/AtomOverview.cpp
     src/Shader.cpp
-    src/Sphere.cpp
-    src/Physics.cpp
 )
 
 target_compile_definitions(Electron_Simulation PRIVATE GLFW_INCLUDE_NONE)
+target_compile_definitions(Electron_Simulation PRIVATE
+    ELECTRON_SHADER_DIR="${CMAKE_CURRENT_SOURCE_DIR}/shaders")
 
 target_link_libraries(Electron_Simulation PRIVATE
     imgui
@@ -69,6 +69,13 @@ target_link_libraries(Electron_Simulation PRIVATE
     ${GLM_LIBRARIES}
     ${OPENGL_gl_LIBRARY}
 )
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(atom_tests tests/atom_tests.cpp src/AtomOverview.cpp)
+    target_include_directories(atom_tests PRIVATE src ${GLM_INCLUDE_DIRS})
+    add_test(NAME atom_sampling_and_zoom COMMAND atom_tests)
+endif()
 
 add_custom_command(TARGET Electron_Simulation POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:Electron_Simulation>/shaders

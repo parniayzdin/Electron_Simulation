@@ -28,10 +28,25 @@ jobs:
             libglfw3-dev \
             libglew-dev \
             libglm-dev \
-            libgl1-mesa-dev
+            libgl1-mesa-dev \
+            xvfb
 
       - name: Configure CMake
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         run: cmake --build build --config Release --parallel 2
+
+      - name: Test hydrogen sampling and zoom
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Render overview and close-up smoke tests
+        run: |
+          cd /tmp
+          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a "$GITHUB_WORKSPACE/build/Electron_Simulation" --smoke-test "$GITHUB_WORKSPACE/build/captures"
+
+      - name: Save rendered views
+        uses: actions/upload-artifact@v4
+        with:
+          name: hydrogen-zoom-captures
+          path: build/captures
