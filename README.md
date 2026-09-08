@@ -12,9 +12,7 @@ I built this project to turn the hydrogen atom from something I had mostly seen 
 
 ## What I built
 
-I represent the electron as a probability cloud rather than as a particle travelling along a fixed orbit. The 65,000 dots are sampled possible locations of the same electron, so denser regions correspond to locations where the electron is more likely to be found.
-
-I also added multiple hydrogen orbitals, camera controls, close up views, a cutaway mode, adjustable point size and brightness, and a Dear ImGui control panel. I enlarged the proton for visibility so the nucleus remains easy to inspect while zooming.
+I represent the electron as a probability cloud rather than as a particle travelling along a fixed orbit. The 65,000 dots are sampled possible locations of the same electron, so denser regions correspond to locations where the electron is more likely to be found. I also added multiple hydrogen orbitals, camera controls, close up views, a cutaway mode, adjustable point size and brightness, and a Dear ImGui control panel. I enlarged the proton for visibility so the nucleus remains easy to inspect while zooming.
 
 ## Physics behind the visualization
 
