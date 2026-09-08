@@ -10,7 +10,7 @@
 
 namespace {
 
-constexpr std::size_t POINT_COUNT = 65000;
+constexpr std::size_t POINT_COUNT = 40000;
 constexpr float PI = 3.14159265f;
 
 float associatedLaguerre(int order, int alpha, float value)
