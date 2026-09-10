@@ -32,11 +32,7 @@ That probability is what drives the shape of the cloud. Regions with higher prob
 
 ## Rendering
 
-I upload the sampled points to OpenGL buffers and render the cloud on the GPU. GLFW manages the window and OpenGL context, GLEW loads the OpenGL functions, GLM handles camera and matrix math, and Dear ImGui provides the interactive controls.
-
-I use a fixed random seed so the generated cloud stays stable while I move the camera. Zooming and orbiting therefore change the viewpoint without regenerating the probability distribution.
-
-The proton uses 2,400 dots as a visual texture. Those dots are not individual physical particles or quarks, and the proton marker is intentionally enlarged so it remains visible beside the orbital cloud.
+I upload the sampled points to OpenGL buffers and render the cloud on the GPU. GLFW manages the window and OpenGL context, GLEW loads the OpenGL functions, GLM handles camera and matrix math, and Dear ImGui provides the interactive controls. I use a fixed random seed so the generated cloud stays stable while I move the camera. Zooming and orbiting therefore change the viewpoint without regenerating the probability distribution. The proton uses 2,400 dots as a visual texture. Those dots are not individual physical particles or quarks, and the proton marker is intentionally enlarged so it remains visible beside the orbital cloud.
 
 ## Run
 
