@@ -10,3 +10,4 @@
 # Editor files
 .vscode/
 .idea/
+.venv/

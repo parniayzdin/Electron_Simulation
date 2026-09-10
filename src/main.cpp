@@ -148,6 +148,13 @@ int run(GLFWwindow* window, OrbitCamera& camera, const char* argv0,
     glGetFloatv(GL_ALIASED_POINT_SIZE_RANGE, pointSizeRange);
     const float maxPointSize = std::min(48.0f, pointSizeRange[1]);
     double previousTime = glfwGetTime();
+
+    // Benchmark variables
+    double benchmarkStart = glfwGetTime();
+    int benchmarkFrames = 0;
+    double lastAverageFps = 0.0;
+    double lastAverageFrameTime = 0.0;
+
     int smokeFrame = 0;
     if (!smokeDirectory.empty()) std::filesystem::create_directories(smokeDirectory);
     const std::array<float, 9> smokeDistances {{12.0f, 9.8f, 3.0f, 0.38f, 0.28f, 1.8f, 12.0f, 12.0f, 12.0f}};
@@ -160,6 +167,26 @@ int run(GLFWwindow* window, OrbitCamera& camera, const char* argv0,
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
         const double now = glfwGetTime();
+        benchmarkFrames++;
+
+        double benchmarkElapsed = now - benchmarkStart;
+
+        if (benchmarkElapsed >= 10.0) {
+            lastAverageFps =
+                static_cast<double>(benchmarkFrames) / benchmarkElapsed;
+
+            lastAverageFrameTime =
+                1000.0 / lastAverageFps;
+
+            std::cout
+                << "10 second benchmark: "
+                << lastAverageFps << " FPS, "
+                << lastAverageFrameTime << " ms/frame"
+                << std::endl;
+
+            benchmarkFrames = 0;
+            benchmarkStart = now;
+        }
         const float dt = static_cast<float>(std::clamp(now - previousTime, 0.0, 0.1));
         previousTime = now;
         int width = 0, height = 0;
@@ -187,6 +214,17 @@ int run(GLFWwindow* window, OrbitCamera& camera, const char* argv0,
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
         auto& io = ImGui::GetIO();
+        ImGui::Text("Live FPS: %.1f", io.Framerate);
+        ImGui::Text(
+            "10s Average: %.1f FPS",
+            lastAverageFps
+        );
+        ImGui::Text(
+            "Average Frame Time: %.2f ms",
+            lastAverageFrameTime
+        );
+        ImGui::Text("FPS: %.1f", io.Framerate);
+        ImGui::Text("Frame time: %.2f ms", 1000.0f / io.Framerate);
         if (!io.WantCaptureKeyboard) {
             if (ImGui::IsKeyPressed(ImGuiKey_Escape)) glfwSetWindowShouldClose(window, GLFW_TRUE);
             if (ImGui::IsKeyPressed(ImGuiKey_H)) camera.setDistance(fitDistance);
@@ -363,7 +401,7 @@ int main(int argc, char** argv) {
     }
     // Some core-profile drivers leave GL_INVALID_ENUM after GLEW initialization.
     while (glGetError() != GL_NO_ERROR) {}
-    glfwSwapInterval(smokeDirectory.empty() ? 1 : 0);
+    glfwSwapInterval(0);   
     OrbitCamera camera;
     glfwSetWindowUserPointer(window, &camera);
     glfwSetMouseButtonCallback(window, mouseButton);
