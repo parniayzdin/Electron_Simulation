@@ -38,20 +38,6 @@ I use a fixed random seed so the generated cloud stays stable while I move the c
 
 The proton uses 2,400 dots as a visual texture. Those dots are not individual physical particles or quarks, and the proton marker is intentionally enlarged so it remains visible beside the orbital cloud.
 
-## Controls
-
-- **Scroll:** zoom in or out
-- **Left drag:** orbit around the atom
-- **Whole atom / H:** return to the orbital overview
-- **Inside cloud:** move into the probability cloud
-- **Nucleus close up / N:** focus on the proton
-- **Cutaway:** remove the positive X side of the cloud to reveal the interior
-- **Space / Slow orbit:** toggle automatic camera rotation
-- **Brightness / Dot size:** adjust the rendered cloud
-- **Esc:** close the application
-
-The orbital picker includes 1s, 2s, 2p, two 3d views, and the original 4f cloud. Zooming keeps the selected orbital active.
-
 ## Run
 
 On Windows with Ubuntu / WSLg, double click **Launch Hydrogen Atom.cmd**. It builds and starts the application using the existing Ubuntu installation.
