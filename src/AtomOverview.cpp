@@ -1,4 +1,5 @@
 #include "AtomOverview.hpp"
+#include "LearnedDensity.hpp"
 
 #include <glm/glm.hpp>
 
@@ -201,10 +202,15 @@ void addPlaneOutline(
 
 } //namespace
 
-AtomOverview::AtomOverview(int n, int l, int m) : n_(n)
+AtomOverview::AtomOverview(int n, int l, int m, bool learnedDensity) : n_(n)
 {
     if (n < 1 || n > 4 || l < 0 || l >= n || m < 0 || m > l)
         throw std::invalid_argument("Expected 1 <= n <= 4, 0 <= l < n, 0 <= m <= l.");
+    if (learnedDensity && n != 1)
+        throw std::invalid_argument("Learned density supports the 1s orbital only.");
+    const auto densityAt = [=](float radius) {
+        return learnedDensity ? learnedGroundStateDensity(radius) : radialDensity(n, l, radius);
+    };
     const float maxSampleRadius = 4.0f * n * n + 12.0f;
     constexpr int RADIAL_SAMPLES = 2048;
     constexpr int THETA_SAMPLES = 1024;
@@ -217,7 +223,7 @@ AtomOverview::AtomOverview(int n, int l, int m) : n_(n)
     for (int index = 0; index < RADIAL_SAMPLES; ++index) {
         const float radius = maxSampleRadius * index /
             static_cast<float>(RADIAL_SAMPLES - 1);
-        const float radialPart = radialDensity(n, l, radius);
+        const float radialPart = densityAt(radius);
         radialWeights[index] = radius * radius * radialPart;
     }
 
@@ -254,7 +260,7 @@ AtomOverview::AtomOverview(int n, int l, int m) : n_(n)
         );
         const float theta = sampleCdf(thetaCdf, PI, generator);
         const float phi = sampleCdf(phiCdf, 2.0f * PI, generator);
-        const float density = radialDensity(n, l, radius) * angularDensity(l, m, theta, phi);
+        const float density = densityAt(radius) * angularDensity(l, m, theta, phi);
         const float sinTheta = std::sin(theta);
 
         positions.push_back(worldScale * radius * glm::vec3(

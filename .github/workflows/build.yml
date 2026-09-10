@@ -34,6 +34,9 @@ jobs:
       - name: Configure CMake
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
+      - name: Check density model training
+        run: python3 ml/train_model.py --check
+
       - name: Build
         run: cmake --build build --config Release --parallel 2
 

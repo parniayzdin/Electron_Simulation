@@ -131,10 +131,11 @@ int run(GLFWwindow* window, OrbitCamera& camera, const char* argv0,
     Shader lines((shaderPath / "basic.vert").string(), (shaderPath / "basic.frag").string());
     PointMesh cloud, nucleus, guides;
     int selectedOrbital = 5;
+    bool useLearnedDensity = false;
     float fitDistance = 12.0f;
     auto loadOrbital = [&] {
         const auto& state = orbitals[selectedOrbital];
-        AtomOverview atom(state.n, state.l, state.m);
+        AtomOverview atom(state.n, state.l, state.m, useLearnedDensity);
         cloud.upload(atom.orbitalVertices());
         nucleus.upload(atom.nucleusVertices());
         guides.upload(atom.clippingPlaneVertices());
@@ -157,11 +158,12 @@ int run(GLFWwindow* window, OrbitCamera& camera, const char* argv0,
 
     int smokeFrame = 0;
     if (!smokeDirectory.empty()) std::filesystem::create_directories(smokeDirectory);
-    const std::array<float, 9> smokeDistances {{12.0f, 9.8f, 3.0f, 0.38f, 0.28f, 1.8f, 12.0f, 12.0f, 12.0f}};
-    const std::array<const char*, 9> smokeNames {{
+    const std::array<float, 11> smokeDistances {{12.0f, 9.8f, 3.0f, 0.38f, 0.28f, 1.8f, 12.0f, 12.0f, 12.0f, 1.8f, 1.8f}};
+    const std::array<const char*, 11> smokeNames {{
         "01-overview.ppm", "02-former-switch.ppm", "03-interior.ppm",
         "04-proton.ppm", "05-minimum-zoom.ppm", "06-ground-state.ppm",
-        "07-dim.ppm", "08-dark.ppm", "09-large-dots.ppm"
+        "07-dim.ppm", "08-dark.ppm", "09-large-dots.ppm",
+        "10-learned-density.ppm", "11-exact-density.ppm"
     }};
 
     while (!glfwWindowShouldClose(window)) {
@@ -205,6 +207,10 @@ int run(GLFWwindow* window, OrbitCamera& camera, const char* argv0,
             if (smokeFrame == 6) { selectedOrbital = 5; loadOrbital(); brightness = 0.10f; }
             if (smokeFrame == 7) brightness = 0.0f;
             if (smokeFrame == 8) { brightness = 0.65f; dotSize = 3.0f; }
+            if (smokeFrame == 9) {
+                selectedOrbital = 0; useLearnedDensity = true; dotSize = 1.25f; loadOrbital();
+            }
+            if (smokeFrame == 10) { useLearnedDensity = false; loadOrbital(); }
         }
         camera.update(dt);
         if (autoRotate && !camera.isDragging && smokeDirectory.empty())
@@ -214,17 +220,6 @@ int run(GLFWwindow* window, OrbitCamera& camera, const char* argv0,
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
         auto& io = ImGui::GetIO();
-        ImGui::Text("Live FPS: %.1f", io.Framerate);
-        ImGui::Text(
-            "10s Average: %.1f FPS",
-            lastAverageFps
-        );
-        ImGui::Text(
-            "Average Frame Time: %.2f ms",
-            lastAverageFrameTime
-        );
-        ImGui::Text("FPS: %.1f", io.Framerate);
-        ImGui::Text("Frame time: %.2f ms", 1000.0f / io.Framerate);
         if (!io.WantCaptureKeyboard) {
             if (ImGui::IsKeyPressed(ImGuiKey_Escape)) glfwSetWindowShouldClose(window, GLFW_TRUE);
             if (ImGui::IsKeyPressed(ImGuiKey_H)) camera.setDistance(fitDistance);
@@ -248,6 +243,7 @@ int run(GLFWwindow* window, OrbitCamera& camera, const char* argv0,
             for (int i = 0; i < static_cast<int>(orbitals.size()); ++i) {
                 if (ImGui::Selectable(orbitals[i].name, i == selectedOrbital)) {
                     selectedOrbital = i;
+                    if (orbitals[i].n != 1) useLearnedDensity = false;
                     loadOrbital();
                     camera.setDistance(fitDistance);
                     cutPosition = 0.0f;
@@ -258,6 +254,13 @@ int run(GLFWwindow* window, OrbitCamera& camera, const char* argv0,
         const auto& state = orbitals[selectedOrbital];
         ImGui::Text("n = %d   l = %d   |m| = %d", state.n, state.l, state.m);
         if (state.m > 0) ImGui::TextDisabled("Real cosine orbital combination");
+        ImGui::BeginDisabled(state.n != 1);
+        if (ImGui::Checkbox("Use learned density", &useLearnedDensity)) loadOrbital();
+        ImGui::EndDisabled();
+        if (state.n != 1) ImGui::TextDisabled("Learned model available for 1s");
+        else ImGui::TextWrapped(useLearnedDensity
+            ? "Learned approximation of the 1s density."
+            : "Exact 1s formula. Toggle to compare the learned model.");
         ImGui::Spacing();
         ImGui::Text("Explore");
         if (ImGui::Button("Whole atom", ImVec2(-1, 0))) camera.setDistance(fitDistance);
@@ -300,6 +303,9 @@ int run(GLFWwindow* window, OrbitCamera& camera, const char* argv0,
         ImGui::TextDisabled("Drag: orbit  /  Scroll: zoom");
         ImGui::TextDisabled("H: whole atom  /  N: nucleus");
         ImGui::TextDisabled("Space: slow orbit  /  Esc: exit");
+        ImGui::TextDisabled("Live: %.1f FPS", io.Framerate);
+        if (lastAverageFps > 0)
+            ImGui::TextDisabled("10s: %.1f FPS / %.2f ms", lastAverageFps, lastAverageFrameTime);
         ImGui::End();
 
         glViewport(0, 0, width, height);

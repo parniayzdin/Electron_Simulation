@@ -1,22 +1,23 @@
+"""Generate exact 1s labels in Bohr radii using the standard library."""
+import csv
 import math
-
-n = 1
-l = 0
+from pathlib import Path
 
 
 def radial_density(radius):
-    rho = 2.0 * radius / n
-
-    wave = math.exp(-rho * 0.5)
-
-    #Probability density = wave squared
-    density = wave * wave
-
-    return density
+    """Unnormalized |R_10(r)|^2; the sampler adds the r^2 volume factor."""
+    return math.exp(-2.0 * radius)
 
 
-#Try a few different distances from the proton
-for radius in [0.0, 0.5, 1.0, 1.5, 2.0, 3.0]:
-    density = radial_density(radius)
+def samples(count=601, maximum=12.0):
+    return [(maximum * i / (count - 1), radial_density(maximum * i / (count - 1)))
+            for i in range(count)]
 
-    print("radius:", radius, "density:", density)
+
+if __name__ == "__main__":
+    destination = Path(__file__).with_name("training_data.csv")
+    with destination.open("w", newline="") as output:
+        writer = csv.writer(output)
+        writer.writerow(["radius_bohr", "radial_density"])
+        writer.writerows(samples())
+    print(f"Wrote {destination}")

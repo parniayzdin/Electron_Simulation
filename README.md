@@ -73,6 +73,42 @@ cmake --build build --parallel 4
 
 The project requires CMake 3.24+, a C++17 compiler, and OpenGL 3.3. Dear ImGui v1.91.6 downloads automatically during the first build.
 
+## Learned density experiment
+
+Select **1s / ground state**, then enable **Use learned density** to render the
+cloud using a small trained regression model. Disable it to compare with the
+exact formula. Other orbitals keep their exact formulas and disable the toggle.
+
+The model learns the ground state radial density from 601 synthetic examples
+between 0 and 12 Bohr radii. It uses 27 fixed Gaussian basis functions and fits
+their output weights with ridge regression. Training fits the square root of
+density; C++ squares the output so predictions cannot become negative. The
+radial sampler still applies the spherical volume factor r squared.
+
+The weights are included in the project, so the app needs no Python process,
+model download, or additional C++ library. This is a supervised approximation
+of a known formula for learning purposes, not a faster renderer or a solver
+for new orbitals. The negligible density tail beyond 12 Bohr radii is truncated.
+
+To retrain with Python 3 and its standard library:
+
+```bash
+python3 ml/train_model.py
+cmake --build build --parallel 4
+ctest --test-dir build --output-on-failure
+```
+
+The trainer generates labels directly, validates on a separate midpoint grid,
+and exports `src/LearnedDensityWeights.hpp`. Run
+`python3 ml/generate_training_data.py` to inspect those training labels as CSV.
+Run `python3 ml/train_model.py --check` to validate without changing the weights.
+
+The initial model has approximately **0.44% volume-weighted relative L1 density
+error** on held-out radii. This measures approximation error, not rendering
+performance. C++ tests independently require less than 1% distribution error
+and check the sampled mean radius, isotropy, finite geometry, and unsupported
+orbital handling. Rendering smoke tests capture both learned and exact 1s views.
+
 ## Testing
 
 I added automated checks for all 20 supported real cosine states through n=4, analytic mean radius, 1s isotropy, 2p angular distribution, finite geometry, and camera zoom behavior.

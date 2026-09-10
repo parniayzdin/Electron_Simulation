@@ -11,7 +11,7 @@ struct Vertex {
 //Builds a fixed hydrogen-orbital probability view without creating a window.
 class AtomOverview {
 public:
-    AtomOverview(int n = 4, int l = 3, int m = 2);
+    AtomOverview(int n = 4, int l = 3, int m = 2, bool learnedDensity = false);
 
     static constexpr float worldScale = 0.16f; // World units per Bohr radius.
     static constexpr float protonDisplayRadius = 0.065f; // Enlarged visual marker.

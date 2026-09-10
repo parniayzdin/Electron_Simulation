@@ -1,4 +1,5 @@
 #include "AtomOverview.hpp"
+#include "LearnedDensity.hpp"
 #include "OrbitCamera.hpp"
 #include <cmath>
 #include <iostream>
@@ -80,8 +81,43 @@ void zoom() {
     }
 }
 
+void learnedDensity() {
+    double absoluteError = 0, exactMass = 0;
+    for (int i = 0; i < 2400; ++i) {
+        const float r = 16.0f * (i + 0.5f) / 2400;
+        const float predicted = learnedGroundStateDensity(r);
+        const double exact = std::exp(-2.0 * r);
+        require(std::isfinite(predicted) && predicted >= 0, "Invalid learned density");
+        require(std::abs(predicted - exact) < 0.01, "Learned pointwise error too large");
+        absoluteError += r * r * std::abs(predicted - exact);
+        exactMass += r * r * exact;
+    }
+    require(absoluteError / exactMass < 0.01, "Learned radial distribution error exceeds 1 percent");
+    require(learnedGroundStateDensity(-1) == 0 && learnedGroundStateDensity(20) == 0 &&
+        learnedGroundStateDensity(std::numeric_limits<float>::quiet_NaN()) == 0,
+        "Invalid model input was not rejected");
+    AtomOverview atom(1, 0, 0, true);
+    double radius = 0, angular = 0;
+    for (const auto& v : atom.orbitalVertices()) {
+        glm::dvec3 p(v.position[0], v.position[1], v.position[2]);
+        const double r = glm::length(p);
+        require(std::isfinite(r), "Invalid learned point");
+        radius += r / AtomOverview::worldScale;
+        if (r > 0) angular += p.y * p.y / (r * r);
+        for (float c : v.color) require(std::isfinite(c), "Invalid learned color");
+    }
+    require(atom.orbitalVertices().size() == 40000, "Missing learned samples");
+    require(std::abs(radius / 40000 - 1.5) < 0.025, "Learned cloud radial mean drifted");
+    require(std::abs(angular / 40000 - 1.0 / 3) < 0.01, "Learned cloud lost isotropy");
+    bool rejected = false;
+    try { AtomOverview invalid(2, 0, 0, true); }
+    catch (const std::invalid_argument&) { rejected = true; }
+    require(rejected, "Unsupported learned orbital accepted");
+    std::cout << "Learned radial weighted L1 error: " << absoluteError / exactMass * 100 << "%\n";
+}
+
 int main() {
-    try { sampling(); zoom(); }
+    try { sampling(); zoom(); learnedDensity(); }
     catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
     std::cout << "PASS: 20 hydrogen orbitals, analytic moments, proton geometry, zoom bounds and smoothing.\n";
 }
