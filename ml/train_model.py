@@ -1,10 +1,11 @@
 """Train Gaussian radial basis regression and export weights for C++.
 
-Only the standard library is needed. Fixed Gaussian features feed a learned
+PyTorch fits the output weights on CPU. Fixed Gaussian features feed a learned
 linear output. Fit sqrt(density), then square predictions for nonnegativity.
 This approximates known 1s physics; it is not a new solver or a speedup.
 """
 import math
+import torch
 import argparse
 from pathlib import Path
 from generate_training_data import radial_density, samples
@@ -18,37 +19,18 @@ def features(radius):
     return [math.exp(-((radius - center) / WIDTH) ** 2) for center in CENTERS]
 
 
-def solve(matrix, target):
-    """Solve the small ridge regression system with partial pivoting."""
-    rows = [row[:] + [value] for row, value in zip(matrix, target)]
-    size = len(rows)
-    for column in range(size):
-        pivot = max(range(column, size), key=lambda i: abs(rows[i][column]))
-        rows[column], rows[pivot] = rows[pivot], rows[column]
-        divisor = rows[column][column]
-        if abs(divisor) < 1e-14:
-            raise ValueError("Singular regression system")
-        rows[column] = [value / divisor for value in rows[column]]
-        for index in range(size):
-            if index != column:
-                factor = rows[index][column]
-                rows[index] = [a - factor * b for a, b in zip(rows[index], rows[column])]
-    return [row[-1] for row in rows]
-
-
 def train():
-    size = len(CENTERS)
-    matrix = [[0.0] * size for _ in range(size)]
-    target = [0.0] * size
-    for radius, density in samples():
-        values = features(radius)
-        for i in range(size):
-            target[i] += values[i] * math.sqrt(density)
-            for j in range(size):
-                matrix[i][j] += values[i] * values[j]
-    for i in range(size):
-        matrix[i][i] += 1e-8
-    return solve(matrix, target)
+    """Fit ridge regression with PyTorch tensors in double precision on CPU."""
+    data = torch.tensor(samples(), dtype=torch.float64)
+    radii = data[:, 0:1]
+    centers = torch.tensor(CENTERS, dtype=torch.float64)
+    design = torch.exp(-((radii - centers) / WIDTH).square())
+    target = data[:, 1].sqrt()
+    regularizer = 1e-8 * torch.eye(len(CENTERS), dtype=torch.float64)
+    weights = torch.linalg.solve(design.T @ design + regularizer, design.T @ target)
+    if not torch.isfinite(weights).all():
+        raise ValueError("Training produced invalid weights")
+    return weights.tolist()
 
 
 def predict(radius, weights):

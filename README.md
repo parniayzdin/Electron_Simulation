@@ -63,17 +63,21 @@ exact formula. Other orbitals keep their exact formulas and disable the toggle.
 
 The model learns the ground state radial density from 601 synthetic examples
 between 0 and 12 Bohr radii. It uses 27 fixed Gaussian basis functions and fits
-their output weights with ridge regression. Training fits the square root of
+their output weights with ridge regression using PyTorch tensors and
+`torch.linalg.solve` on CPU in double precision. Training fits the square root of
 density; C++ squares the output so predictions cannot become negative. The
 radial sampler still applies the spherical volume factor r squared.vThe weights are included in the project, so the app needs no Python process,
 model download, or additional C++ library. This is a supervised approximation
 of a known formula for learning purposes, not a faster renderer or a solver
 for new orbitals. The negligible density tail beyond 12 Bohr radii is truncated.
 
-To retrain with Python 3 and its standard library:
+To retrain with Python 3 and the CPU version of PyTorch:
 
 ```bash
-python3 ml/train_model.py
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r ml/requirements.txt
+python ml/train_model.py
 cmake --build build --parallel 4
 ctest --test-dir build --output-on-failure
 ```
